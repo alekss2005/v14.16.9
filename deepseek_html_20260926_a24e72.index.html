@@ -1,0 +1,2460 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+<title>Карта тревог (v14.16.9)</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>
+  :root {
+    --bg:#e8eef4; --panel:rgba(255,255,255,.94); --text:#1e293b; --muted:#64748b;
+    --accent:#2563eb; --danger:#dc2626;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg);color:var(--text)}
+  #map{position:absolute;inset:0;z-index:1}
+
+  .hud-bottom{position:absolute;bottom:12px;left:10px;right:10px;z-index:1000;
+    display:flex;flex-direction:column;gap:6px;align-items:flex-start;pointer-events:none}
+  .hud-bottom>*{pointer-events:auto}
+  button{background:var(--panel);backdrop-filter:blur(10px);
+    border:1px solid rgba(148,163,184,.5);
+    color:var(--text);padding:6px 12px;border-radius:8px;font-size:1rem;line-height:1;
+    cursor:pointer;box-shadow:0 2px 8px rgba(15,23,42,.12);font-weight:700}
+  button:active{background:#dbeafe}
+  button.danger{color:#991b1b}
+  .btn-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .attr{font-size:.6rem;color:var(--muted);line-height:1.35;background:var(--panel);
+    backdrop-filter:blur(10px);border:1px solid rgba(148,163,184,.5);border-radius:6px;
+    padding:4px 8px;max-width:100%}
+  .attr a{color:var(--accent);text-decoration:none}
+
+  /* Тёмный попап */
+  .leaflet-popup-content-wrapper{
+    background:rgba(15,23,42,.96);
+    color:#e2e8f0;
+    border-radius:12px;
+    box-shadow:0 8px 32px rgba(0,0,0,.5);
+    border:1px solid rgba(148,163,184,.25);
+  }
+  .leaflet-popup-tip{background:rgba(15,23,42,.96)}
+  .leaflet-popup-content{margin:12px 14px;font-size:.85rem;line-height:1.45;max-width:340px}
+  .leaflet-popup-close-button{color:#cbd5e1!important;font-size:20px!important;padding:4px 8px!important}
+  .popup-title{font-weight:700;font-size:.95rem;margin-bottom:6px}
+  .popup-meta{color:#94a3b8;font-size:.75rem}
+  .type-uav{color:#f1f5f9}
+  .type-missile,.type-ballistic{color:#f87171}
+  .type-kab{color:#f87171}
+  .type-fpv{color:#fbbf24}
+  .type-recon{color:#7dd3fc}
+  .type-mig31k{color:#fb7185}
+  .type-banderol{color:#f87171}
+  .type-launcher{color:#f87171}
+  .type-jet_drone{color:#f87171}
+  .type-umpb{color:#fb923c}
+  .type-strategic_aviation{color:#fb923c}
+  .type-awacs{color:#38bdf8}
+  .type-impact{color:#f87171}
+  .popup-guess{color:#fbbf24;font-size:.7rem;margin-top:6px}
+  .popup-advisory{background:rgba(3,105,161,.35);color:#bae6fd;padding:4px 8px;border-radius:6px;
+    font-weight:700;font-size:.72rem;display:inline-block;margin-top:6px;border:1px solid rgba(125,211,252,.4)}
+  .popup-area{background:rgba(71,85,105,.4);color:#cbd5e1;padding:4px 8px;border-radius:6px;
+    font-weight:700;font-size:.72rem;display:inline-block;margin-top:6px;border:1px solid rgba(148,163,184,.4)}
+  .popup-kyiv{background:rgba(14,116,144,.35);color:#a5f3fc;padding:4px 8px;border-radius:6px;
+    font-weight:700;font-size:.72rem;display:inline-block;margin-top:6px;border:1px solid rgba(34,211,238,.4)}
+  .popup-alt{background:rgba(22,163,74,.25);color:#86efac;padding:4px 8px;border-radius:6px;
+    font-weight:700;font-size:.75rem;display:inline-block;margin-top:6px;border:1px solid rgba(134,239,172,.4)}
+  .popup-place{background:rgba(220,38,38,.2);color:#fca5a5;padding:4px 8px;border-radius:6px;
+    font-weight:700;font-size:.75rem;display:inline-block;margin-top:6px;border:1px solid rgba(248,113,113,.4)}
+  .popup-time{color:#94a3b8;font-size:.72rem;margin-top:6px;padding:4px 0;
+    border-top:1px solid rgba(148,163,184,.15)}
+  .popup-channels{margin-top:8px;padding-top:6px;border-top:1px solid rgba(148,163,184,.15);font-size:.7rem}
+  .popup-channels .ch{display:inline-block;background:rgba(148,163,184,.2);color:#cbd5e1;
+    padding:2px 7px;border-radius:10px;margin:2px 3px 2px 0;border:1px solid rgba(148,163,184,.3)}
+  .popup-channels .ch.trusted{background:rgba(22,163,74,.25);border-color:rgba(134,239,172,.4);color:#86efac}
+  .popup-channels .ch.suspicious{background:rgba(220,38,38,.25);border-color:rgba(248,113,113,.4);color:#fca5a5}
+  .popup-eta{background:rgba(220,38,38,.25);color:#fca5a5;padding:4px 8px;border-radius:6px;
+    font-weight:700;font-size:.75rem;display:inline-block;margin-top:6px;
+    border:1px solid rgba(248,113,113,.4)}
+  .popup-stale{background:rgba(217,119,6,.25);color:#fcd34d;padding:4px 8px;border-radius:6px;
+    font-weight:700;font-size:.72rem;display:inline-block;margin-top:6px;border:1px solid rgba(251,191,36,.4)}
+  .popup-confirm{background:rgba(250,204,21,.25);color:#fef08a;padding:4px 8px;border-radius:6px;
+    font-weight:700;font-size:.75rem;display:inline-block;margin-top:6px;
+    border:1px solid rgba(250,204,21,.5)}
+
+  /* Иконки */
+  .threat-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+    filter:drop-shadow(0 1px 3px rgba(0,0,0,.4));transform-origin:center center;position:relative;
+    animation:flightPulse 1.6s ease-in-out infinite;
+    transition:filter .3s ease}
+  .threat-icon svg{width:24px;height:24px;display:block}
+
+  @keyframes flightPulse{
+    0%,100%{filter:drop-shadow(0 1px 3px rgba(0,0,0,.4));opacity:1}
+    50%{filter:drop-shadow(0 0 8px rgba(37,99,235,.55));opacity:.92}}
+
+  /* v14.16.9: усиление по количеству подтверждений */
+  .threat-icon.confirm-2{
+    filter:drop-shadow(0 0 8px rgba(34,197,94,.85)) drop-shadow(0 0 3px rgba(34,197,94,.5));
+  }
+  .threat-icon.confirm-3{
+    filter:drop-shadow(0 0 12px rgba(250,204,21,.95)) drop-shadow(0 0 5px rgba(250,204,21,.7));
+    animation:confirmPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes confirmPulse{
+    0%,100%{ transform:scale(1); filter:drop-shadow(0 0 10px rgba(250,204,21,.85)); }
+    50%{ transform:scale(1.08); filter:drop-shadow(0 0 18px rgba(250,204,21,1)); }
+  }
+  .threat-icon.confirm-5{
+    filter:drop-shadow(0 0 16px rgba(250,204,21,1)) drop-shadow(0 0 6px rgba(250,204,21,.9));
+    animation:confirmPulseStrong 0.95s ease-in-out infinite;
+  }
+  @keyframes confirmPulseStrong{
+    0%,100%{ transform:scale(1); filter:drop-shadow(0 0 14px rgba(250,204,21,.95)); }
+    50%{ transform:scale(1.14); filter:drop-shadow(0 0 26px rgba(250,204,21,1)); }
+  }
+
+  /* Обводка вокруг иконки для усиленных меток */
+  .threat-icon.confirm-2::before,
+  .threat-icon.confirm-3::before,
+  .threat-icon.confirm-5::before{
+    content:""; position:absolute; inset:-4px; border-radius:50%;
+    border:1.5px solid currentColor; opacity:.55; pointer-events:none;
+  }
+  .threat-icon.confirm-2::before{ color:#22c55e }
+  .threat-icon.confirm-3::before{ color:#facc15; opacity:.75 }
+  .threat-icon.confirm-5::before{ color:#fde047; opacity:.9; border-width:2px }
+
+  .threat-icon.observation{animation:none;filter:drop-shadow(0 1px 3px rgba(0,0,0,.5))}
+  .threat-icon.advisory{animation:none;opacity:.75;filter:drop-shadow(0 1px 3px rgba(0,0,0,.3)) grayscale(.25)}
+  .threat-icon.area-only{opacity:.55;filter:grayscale(.5) drop-shadow(0 1px 2px rgba(0,0,0,.3))}
+  .threat-icon.uncertain{opacity:.7}
+  .threat-icon.falling{animation:fallingBlink .55s ease-in-out infinite}
+  @keyframes fallingBlink{
+    0%,100%{filter:drop-shadow(0 0 2px rgba(220,38,38,.9));opacity:1}
+    50%{filter:drop-shadow(0 0 14px rgba(220,38,38,1));opacity:.35}}
+  .threat-icon.falling svg path,
+  .threat-icon.falling svg polygon,
+  .threat-icon.falling svg rect{fill:#dc2626 !important;stroke:#7f1d1d !important}
+  .threat-icon.stale{opacity:.55;filter:grayscale(.4) drop-shadow(0 1px 2px rgba(0,0,0,.3))}
+  .falling-badge{position:absolute;left:50%;top:-16px;transform:translateX(-50%);
+    background:#7f1d1d;color:#fecaca;font-size:9px;font-weight:800;
+    padding:1px 5px;border-radius:4px;white-space:nowrap;
+    border:1px solid #dc2626;animation:badgeBlink .55s ease-in-out infinite}
+  @keyframes badgeBlink{0%,100%{opacity:1}50%{opacity:.4}}
+  .stale-badge{position:absolute;left:50%;top:-16px;transform:translateX(-50%);
+    background:#78350f;color:#fef3c7;font-size:8px;font-weight:800;
+    padding:1px 5px;border-radius:4px;white-space:nowrap;
+    border:1px solid #fbbf24;letter-spacing:.03em}
+  .advisory-badge{position:absolute;left:50%;top:-16px;transform:translateX(-50%);
+    background:#0369a1;color:#e0f2fe;font-size:8px;font-weight:800;
+    padding:1px 5px;border-radius:4px;white-space:nowrap;
+    border:1px solid #0ea5e9;letter-spacing:.03em}
+  .area-badge{position:absolute;left:50%;top:-16px;transform:translateX(-50%);
+    background:#475569;color:#f1f5f9;font-size:8px;font-weight:800;
+    padding:1px 5px;border-radius:4px;white-space:nowrap;
+    border:1px solid #94a3b8;letter-spacing:.03em}
+  .kyiv-badge{position:absolute;left:50%;top:-16px;transform:translateX(-50%);
+    background:#0e7490;color:#ecfeff;font-size:8px;font-weight:800;
+    padding:1px 5px;border-radius:4px;white-space:nowrap;
+    border:1px solid #22d3ee;letter-spacing:.03em}
+  .threat-icon.threat-pulse{animation:threatPulse 1.0s ease-in-out infinite}
+  @keyframes threatPulse{
+    0%,100%{filter:drop-shadow(0 0 3px rgba(220,38,38,.9));opacity:1}
+    50%{filter:drop-shadow(0 0 14px rgba(220,38,38,1));opacity:.55}}
+  .threat-icon.strat-pulse{animation:stratIconPulse 1.8s ease-in-out infinite}
+  @keyframes stratIconPulse{
+    0%,100%{filter:drop-shadow(0 0 4px rgba(234,88,12,.8));opacity:1}
+    50%{filter:drop-shadow(0 0 16px rgba(234,88,12,1));opacity:.7}}
+  .impact-icon{width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+    animation:impactPulse 1.1s ease-in-out infinite;transform-origin:center center}
+  .impact-icon svg{width:32px;height:32px;display:block;filter:drop-shadow(0 0 4px rgba(220,38,38,.9))}
+  @keyframes impactPulse{
+    0%,100%{transform:scale(1);filter:drop-shadow(0 0 6px rgba(220,38,38,.9))}
+    50%{transform:scale(1.15);filter:drop-shadow(0 0 18px rgba(220,38,38,1))}}
+  .threat-icon .dir-arrow{position:absolute;top:-11px;left:50%;margin-left:-5px;width:0;height:0;
+    border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:9px solid #111;
+    filter:drop-shadow(0 0 1px #fff)}
+  .alt-badge{position:absolute;left:calc(100% + 4px);top:50%;transform:translateY(-50%);
+    background:rgba(255,255,255,.96);color:#166534;font-size:10px;font-weight:800;
+    padding:2px 6px;border-radius:4px;white-space:nowrap;
+    border:1px solid rgba(34,197,94,.7);pointer-events:none;
+    box-shadow:0 1px 4px rgba(15,23,42,.2)}
+  .alt-badge.low{color:#b91c1c;border-color:rgba(220,38,38,.7);background:#fef2f2}
+  .alt-badge.med{color:#b45309;border-color:rgba(217,119,6,.6);background:#fffbeb}
+  .eta-badge{position:absolute;right:calc(100% + 4px);top:50%;transform:translateY(-50%);
+    background:#7f1d1d;color:#fecaca;font-size:9.5px;font-weight:800;
+    padding:2px 5px;border-radius:4px;white-space:nowrap;
+    border:1px solid #dc2626;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+  .count-badge{position:absolute;right:-6px;top:-6px;height:16px;min-width:16px;padding:0 5px;
+    border-radius:8px;background:#ea580c;color:#fff;font-size:10px;font-weight:900;
+    display:flex;align-items:center;justify-content:center;
+    border:1px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);line-height:1}
+  .confirm-badge{position:absolute;left:-6px;top:-6px;height:14px;min-width:14px;padding:0 4px;
+    border-radius:7px;background:#16a34a;color:#fff;font-size:9px;font-weight:900;
+    display:flex;align-items:center;justify-content:center;gap:1px;
+    border:1px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);line-height:1}
+  .confirm-badge::before{content:"✓"}
+  .confirm-badge.medium{background:#ca8a04}
+  .confirm-badge.low{background:#dc2626}
+  .confirm-badge.pending{background:#0ea5e9}
+  /* v14.16.9: усиленные бейджи подтверждений */
+  .confirm-badge.strong{
+    background:linear-gradient(135deg,#facc15,#f59e0b);
+    color:#78350f;
+    box-shadow:0 0 10px rgba(250,204,21,.9), 0 1px 3px rgba(0,0,0,.4);
+    border-color:#fef08a;
+    font-size:10px;
+    height:16px;
+    min-width:16px;
+    border-radius:8px;
+  }
+  .confirm-badge.strong::before{ content:"★★" }
+  .confirm-badge.max{
+    background:linear-gradient(135deg,#fde047,#f59e0b,#dc2626);
+    color:#fff;
+    box-shadow:0 0 14px rgba(250,204,21,1), 0 0 4px rgba(220,38,38,.8);
+    border-color:#fff7ed;
+    font-size:10px;
+    height:18px;
+    min-width:18px;
+    border-radius:9px;
+    animation:maxBadgePulse 1s ease-in-out infinite;
+  }
+  @keyframes maxBadgePulse{
+    0%,100%{ transform:scale(1); box-shadow:0 0 10px rgba(250,204,21,.9), 0 0 4px rgba(220,38,38,.6); }
+    50%{ transform:scale(1.1); box-shadow:0 0 18px rgba(250,204,21,1), 0 0 6px rgba(220,38,38,1); }
+  }
+  .confirm-badge.max::before{ content:"★★★" }
+
+  .stage-badge{position:absolute;left:50%;bottom:-26px;transform:translateX(-50%);
+    background:#7f1d1d;color:#fff;font-size:8px;font-weight:800;
+    padding:1px 5px;border-radius:3px;white-space:nowrap;
+    border:1px solid #dc2626;letter-spacing:.03em}
+  .stage-badge.warn{background:#b45309;border-color:#f59e0b}
+  .stage-badge.pending{background:#0369a1;border-color:#0ea5e9}
+  .stage-badge.takeoff{background:#7c2d12;border-color:#ea580c}
+  .stage-badge.ready{background:#9a3412;border-color:#ea580c}
+  .stage-badge.observe{background:#334155;border-color:#64748b}
+  .age-badge{position:absolute;left:50%;bottom:-42px;transform:translateX(-50%);
+    background:#1e293b;color:#cbd5e1;font-size:8px;font-weight:700;
+    padding:1px 5px;border-radius:3px;white-space:nowrap;
+    border:1px solid #475569;letter-spacing:.03em}
+  .zone-circle{fill:rgba(59,130,246,.05);stroke:#3b82f6;stroke-width:1.5;
+    stroke-dasharray:6 4;opacity:.5;pointer-events:none}
+
+  .leaflet-control-attribution{font-size:9px!important;
+    background:rgba(255,255,255,.8)!important;color:#64748b!important}
+  .leaflet-control-attribution a{color:var(--accent)!important}
+
+  .toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:2000;
+    background:#1e293b;color:#f1f5f9;padding:10px 16px;border-radius:10px;
+    border:1px solid rgba(148,163,184,.4);font-size:.8rem;
+    box-shadow:0 8px 24px rgba(0,0,0,.3);
+    opacity:0;transition:opacity .25s;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="hud-bottom">
+  <div class="btn-row">
+    <button type="button" id="btnRefresh" title="Обновить">↻</button>
+    <button type="button" id="btnClear" class="danger" title="Очистить">✕</button>
+  </div>
+  <div class="attr">
+    Данные: <a href="https://neptun.in.ua/" target="_blank" rel="noopener">NEPTUN</a>.
+    Тайлы: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>.
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<script>
+/* ============================================================
+   КОНФИГ — v14.16.9
+============================================================ */
+const CONFIG = {
+  API_BASE:     "https://neptun.in.ua",
+  API_THREATS:  "https://neptun.in.ua/api/v1/threats",
+  API_ALERTS:   "https://neptun.in.ua/api/v1/alerts",
+  API_MESSAGES: "https://neptun.in.ua/api/v1/messages",
+  WS_URL:       "wss://neptun.in.ua/api/v1/stream",
+
+  POLL_MS: 5000,
+  MAX_BACKOFF_MS: 120000,
+  WS_RECONNECT_MS: 3000,
+  WS_RECONNECT_MAX_MS: 60000,
+
+  KYIV: [50.45, 30.52],
+  KYIV_ALERT_KM: 50,
+  ZONE_RADIUS_KM: 250,
+  STALE_MSG_MS: 5 * 60 * 1000,
+  IMPACT_TTL_MS: 5 * 60 * 1000,
+  LAUNCHER_SOLO_TTL_MS: 5 * 60 * 1000,
+  MIN_CHANNELS_CONFIRM: 2,
+
+  EXTRAPOLATION_HOURS: 0.33,
+  STALE_VISUAL_AFTER_HOURS: 0.5,
+  MIG_SHOW_OUTSIDE_ZONE: true,
+  STRAT_SHOW_OUTSIDE_ZONE: true,
+  TRAIL_MAX_KM: 400,
+  TRAIL_MIN_ORIGIN_DIST_KM: 30,
+  TRAIL_START_OFFSET_KM: 2,
+  TRAIL_COLOR: "#dc2626",
+  TRAIL_WEIGHT: 1.4,
+  TRAIL_OPACITY: 0.8,
+  UNCERTAIN_KM: 20,
+  TILE_URL: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  TILE_ATTR: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+
+  NEAREST_PLACE_MAX_KM: 25,
+
+  MOVE_ANIMATION_MS: 1000,
+  POSITION_OFFSET_KM: 3,
+  FALLBACK_SPEED: {
+    uav:180, recon:120, fpv:80,
+    missile:800, ballistic:2000, banderol:700, jet_drone:750,
+    kab:400, umpb:500, mig31k:900, awacs:700,
+    strategic_aviation:800, unknown:150
+  },
+
+  ALTITUDE_CHANNELS: ["chyste_nebo", "chistenebo", "чистенебо"]
+};
+
+const OBSERVATION_TYPES = new Set(["banderol", "jet_drone"]);
+
+const CHANNEL_WEIGHTS = {
+  "deraketaua": 2.0, "war_raketaua": 1.8, "monitorwarr": 1.8,
+  "ukrainar": 1.8, "ua_rockets": 1.5, "vibuxaviasia": 1.5,
+  "monitor_ukr": 1.5, "mon1tor_ua": 1.3, "radar_raketaa": 1.3,
+  "kpszsu": 1.5, "povitryana_rozvidka": 1.3, "zaxidniy_control": 1.3,
+  "veselyy_pivden": 1.2, "ukrainesradar": 1.3, "war_monitor": 1.2,
+  "Ukraine_UA_24_7": 1.3, "kiev_nebo": 1.2, "kievreal1": 1.1,
+  "kyiv_vanek": 1.1, "k_dvizh": 1.0, "kyiv_golovne": 1.2,
+  "avia_radar_info": 1.2, "kiev_levyy_bereg": 1.0, "kiev_tryvoha": 1.2,
+  "monikppy": 1.2, "vybuhy_bavovna": 1.3, "praviy_bereg_kiev": 1.0,
+  "operinform": 1.2, "kievinform_ua1": 1.0, "chernigov_chernigiv1": 1.1,
+  "kievinfo_kyiv": 1.1, "tryvoga_chomu": 1.0, "monitoringwarua": 1.3,
+  "chyste_nebo": 1.4, "monitoring_ukrainian": 1.2, "kyiv_oper": 1.1,
+  "monitor_war_ua": 1.2, "ukraine_24_7": 1.1
+};
+function channelWeight(name) {
+  const k = (name||"").replace(/^@/,"").toLowerCase().trim();
+  if (CHANNEL_WEIGHTS[k] != null) return CHANNEL_WEIGHTS[k];
+  for (const [key, w] of Object.entries(CHANNEL_WEIGHTS)) if (k.includes(key)) return w;
+  return 1.0;
+}
+function channelClass(name) {
+  const w = channelWeight(name);
+  if (w >= 1.5) return "trusted";
+  if (w >= 1.0) return "";
+  return "suspicious";
+}
+function isAltitudeChannel(channelName) {
+  const k = (channelName||"").replace(/^@/,"").toLowerCase().trim();
+  for (const key of CONFIG.ALTITUDE_CHANNELS) if (k.includes(key)) return true;
+  return false;
+}
+
+function inZone(lat, lon) {
+  if (lat == null || lon == null) return false;
+  const d = haversineKm(CONFIG.KYIV[0], CONFIG.KYIV[1], lat, lon);
+  return d <= CONFIG.ZONE_RADIUS_KM;
+}
+
+const MIG_AIRBASES = [
+  { key:"саваслейка", re:/саваслейк|саваслейка/i, name:"Саваслейка", lat:55.42, lon:42.30, region:"Нижегородская обл." },
+  { key:"ахтубинск", re:/ахтубинск/i, name:"Ахтубинск", lat:48.28, lon:46.17, region:"Астраханская обл." },
+  { key:"моздок", re:/моздок/i, name:"Моздок", lat:43.79, lon:44.61, region:"Северная Осетия" },
+  { key:"бельбек", re:/бельбек/i, name:"Бельбек", lat:44.69, lon:33.57, region:"Крым" },
+  { key:"шайковка", re:/шайковк/i, name:"Шайковка", lat:54.23, lon:34.37, region:"Калужская обл." },
+  { key:"энгельс", re:/энгельс|енгельс/i, name:"Энгельс", lat:51.48, lon:46.21, region:"Саратовская обл." }
+];
+function findMigAirbase(text) {
+  const t = text || "";
+  for (const b of MIG_AIRBASES) if (b.re.test(t)) return b;
+  return null;
+}
+const STRATEGIC_AIRBASES = [
+  { key:"olenya", re:/олень[яи]|оленья/i, name:"Оленья", lat:68.15, lon:33.47, region:"Мурманская обл." },
+  { key:"engels", re:/энгельс|енгельс/i, name:"Энгельс-2", lat:51.48, lon:46.21, region:"Саратовская обл." },
+  { key:"ukrainka", re:/украинка|українка/i, name:"Украинка", lat:51.17, lon:128.45, region:"Амурская обл." },
+  { key:"belaya", re:/белая\s+(?:авиабаза|авіабаза)|авиабаза\s+белая|авіабаза\s+біла|белая\s+иркут/i, name:"Белая", lat:52.92, lon:103.58, region:"Иркутская обл." },
+  { key:"dyagilevo", re:/дягилево|дягілево/i, name:"Дягилево", lat:54.64, lon:39.57, region:"Рязанская обл." },
+  { key:"mozdok", re:/моздок/i, name:"Моздок", lat:43.79, lon:44.61, region:"Северная Осетия" },
+  { key:"shaikovka", re:/шайковк/i, name:"Шайковка", lat:54.23, lon:34.37, region:"Калужская обл." },
+  { key:"saratov", re:/саратов/i, name:"Саратов", lat:51.57, lon:46.03, region:"Саратовская обл." },
+  { key:"anadyr", re:/анадыр/i, name:"Анадырь", lat:64.73, lon:177.74, region:"Чукотка" }
+];
+function findStrategicAirbases(text) {
+  const t = text || "";
+  const found = [];
+  for (const b of STRATEGIC_AIRBASES) if (b.re.test(t)) found.push(b);
+  return found;
+}
+
+const REGIONS = [
+  { key:"курськ", re:/курськ|курск|курской\s+обл|курської\s+обл/i, name:"Курська обл.", lat:51.73, lon:36.19 },
+  { key:"брянськ", re:/брянськ|брянск|брянської\s+обл|брянской\s+обл/i, name:"Брянська обл.", lat:53.25, lon:34.37 },
+  { key:"белгород", re:/белгород|бєлгород|белгородської|белгородской/i, name:"Бєлгородська обл.", lat:50.60, lon:36.59 },
+  { key:"ростов", re:/ростов|ростовськ|ростовской/i, name:"Ростовська обл.", lat:47.24, lon:39.70 },
+  { key:"воронеж", re:/воронеж/i, name:"Воронезька обл.", lat:51.67, lon:39.18 },
+  { key:"орловськ", re:/орловськ|орловск|орловской\s+обл/i, name:"Орловська обл.", lat:52.97, lon:36.06 },
+  { key:"тульськ", re:/тульськ|тульск|тульской\s+обл/i, name:"Тульська обл.", lat:54.20, lon:37.62 },
+  { key:"крым", re:/крим|крым|севастопол|чорне\s+море|черное\s+море/i, name:"Крим / Чорне море", lat:45.00, lon:34.00 },
+  { key:"ачм", re:/\bачм\b|азово-чорноморськ|азово-черноморск|чорноморськ(?:ий|а)?\s+регіон/i, name:"АЧМ (Чорне море)", lat:44.50, lon:33.50 },
+  { key:"каспий", re:/каспій|каспий|астрахан/i, name:"Каспій", lat:46.00, lon:48.00 },
+  { key:"азов", re:/акватор|акваторії|азовськ|азовського|азовское/i, name:"Азовське море", lat:46.00, lon:37.00 }
+];
+
+const LAUNCH_ORIGINS = [
+  { key:"орел-южный", re:/орел[-–\s]?південн|орёл[-–\s]?южн|орел[-–\s]?южн|полігон\s+орел|полигон\s+орел/i, name:"Орёл-Южный", lat:52.75, lon:36.20, region:"Орловская обл." },
+  { key:"цимбулова", re:/цимбулов|цимбулова/i, name:"Цимбулова", lat:52.85, lon:36.30, region:"Орловская обл." },
+  { key:"халино", re:/халино|халіно/i, name:"Халино", lat:51.68, lon:36.16, region:"Курская обл." },
+  { key:"курск-восточный", re:/курск[-–\s]?восточн|курськ[-–\s]?східн|полігон\s+курск|полигон\s+курск/i, name:"Курск-Восточный", lat:51.68, lon:36.30, region:"Курская обл." },
+  { key:"чауда", re:/чауда|чаудинськ/i, name:"Чауда", lat:45.00, lon:35.83, region:"Крым" },
+  { key:"ейск-полигон", re:/полігон\s+ейск|полигон\s+ейск|ейськ[-–\s]?полигон/i, name:"Ейск", lat:46.68, lon:38.22, region:"Краснодарский край" },
+  { key:"миллерово-полигон", re:/полігон\s+миллерово|полигон\s+миллерово/i, name:"Миллерово", lat:48.92, lon:40.40, region:"Ростовская обл." },
+  { key:"гвардійське", re:/гвардійськ|гвардейск/i, name:"Гвардійське", lat:45.11, lon:34.02, region:"Крым" },
+  { key:"джанкой", re:/джанкой|джанкойськ/i, name:"Джанкой", lat:45.71, lon:34.39, region:"Крым" },
+  { key:"саки", re:/сакськ|\bсаки\b/i, name:"Саки", lat:45.13, lon:33.60, region:"Крым" },
+  { key:"севастополь", re:/севастопол/i, name:"Севастополь", lat:44.62, lon:33.53, region:"Крим" },
+  { key:"євпаторія", re:/євпаторі|евпатори/i, name:"Євпаторія", lat:45.19, lon:33.36, region:"Крим" },
+  { key:"бахчисарай", re:/бахчисарай/i, name:"Бахчисарай", lat:44.75, lon:33.86, region:"Крим" },
+  { key:"керч", re:/керч|керчь/i, name:"Керч", lat:45.35, lon:36.47, region:"Крим" },
+  { key:"орел", re:/орл[аеіу]?\b|орёл|орел/i, name:"Орёл", lat:52.97, lon:36.06, region:"Орловская обл." },
+  { key:"курск-город", re:/курськ|курск/i, name:"Курск", lat:51.73, lon:36.19, region:"Курская обл." },
+  { key:"белгород-город", re:/белгород|бєлгород/i, name:"Белгород", lat:50.60, lon:36.59, region:"Белгородская обл." },
+  { key:"брянск-город", re:/брянськ|брянск/i, name:"Брянск", lat:53.25, lon:34.37, region:"Брянская обл." },
+  { key:"воронеж-город", re:/воронеж/i, name:"Воронеж", lat:51.67, lon:39.18, region:"Воронежская обл." },
+  { key:"ростов-город", re:/ростов/i, name:"Ростов-на-Дону", lat:47.24, lon:39.70, region:"Ростовская обл." },
+  { key:"таганрог", re:/таганрог/i, name:"Таганрог", lat:47.22, lon:38.90, region:"Ростовская обл." },
+  { key:"миллерово", re:/миллерово/i, name:"Миллерово", lat:48.92, lon:40.40, region:"Ростовская обл." },
+  { key:"морозовск", re:/морозовск/i, name:"Морозовск", lat:48.35, lon:41.83, region:"Ростовская обл." },
+  { key:"энгельс", re:/энгельс|енгельс/i, name:"Энгельс", lat:51.48, lon:46.21, region:"Саратовская обл." },
+  { key:"ахтубинск", re:/ахтубинск/i, name:"Ахтубинск", lat:48.28, lon:46.17, region:"Астраханская обл." },
+  { key:"ейск", re:/ейск|єйськ/i, name:"Ейск", lat:46.71, lon:38.27, region:"Краснодарский край" },
+  { key:"приморско", re:/приморско-ахтарск/i, name:"Приморско-Ахтарск", lat:46.05, lon:38.17, region:"Краснодарский край" }
+];
+
+const CLASSIFIER = (() => {
+  const HARD_RULES = [
+    { re:/ту-?\s*95|ту-?\s*160|ту-?\s*22|tu-?\s*95|tu-?\s*160|стратег[іи]чн[оаі]?\s*авіац|стратегическ[ао]й?\s*авиац/i, type:"strategic_aviation", label:"Стратег. авиация", isStrategic:true },
+    { re:/а-?50\s?у|а-?50у|a-?50u/i, type:"awacs", label:"А-50У", isAwacs:true },
+    { re:/реактивн(?:ий|ых|і|ого|ими|ые)?\s*шахед|герань\s*-?\s*[34]\b|geran\s*-?\s*[34]\b|реактив[а-я]*\s*(?:бпла|дрон|герань|шахед)/i, type:"jet_drone", label:"Реакт. Герань", isMissile:true, isJetDrone:true },
+    { re:/ум[пб]б[-\s]?5|ум[пб]б|umpb|умпб/i, type:"umpb", label:"УМПБ-5", isMissile:true, isKAB:true },
+    { re:/мгкр|мг\s*кр|малокаліберн(?:а|і|ой)?\s*(?:крилат|ракет)/i, type:"banderol", label:"мгКР", isMissile:true, isBanderol:true },
+    { re:/бандерол/i, type:"banderol", label:"Бандероль", isMissile:true, isBanderol:true },
+    { re:/s\s*[-]?\s*8000|с\s*[-]?\s*8000/i, type:"banderol", label:"S8000", isMissile:true, isBanderol:true },
+    { re:/балістик|баллистик|кинжал|кінжал|іскандер|искандер|циркон|кн-?23|kn-?23/i, type:"ballistic", label:"Бал", isMissile:true },
+    { re:/герань\s*-?\s*5|geran\s*-?\s*5|герань-5|geran-5/i, type:"missile", label:"Г-5", isMissile:true, geran5:true },
+    { re:/каб\b|kab\b|уаб\b/i, type:"kab", label:"КАБ", isMissile:true, isKAB:true },
+    { re:/крилат[аиі]?\s+ракет|крилата\s+ракет|х-?\s*101|х-?\s*555|калібр|калибр|kalibr/i, type:"missile", label:"КР", isMissile:true },
+    { re:/миг-?31|міг-?31|mig-?31/i, type:"mig31k", label:"МиГ-31К", isMig:true }
+  ];
+  const SOFT_RULES = [
+    { re:/fpv|фпв/i, type:"fpv", label:"FPV" },
+    { re:/шахед|shahed|герань|geran|бпла|бплa|дрон|безпілотник|беспилотник|реактив[а-я]*/i, type:"uav", label:"БПЛА" },
+    { re:/розвід|развед|recon|розвідувальн/i, type:"recon", label:"Розв" }
+  ];
+  return function classify(text) {
+    const t = text || "";
+    for (const r of HARD_RULES) if (r.re.test(t)) return { ...r, hard:true };
+    for (const r of SOFT_RULES) if (r.re.test(t)) return { ...r, hard:false };
+    return null;
+  };
+})();
+
+const IMPACT_RE = new RegExp([
+  "прил[іi]т","прилет","влучан","попадан",
+  "удар\\s+по","удар\\s+в","бавовн",
+  "(?:вибух|взрыв)\\s+(?:у|в|на|под|возле|біля|рядом)\\s+",
+  "(?:серія|кілька|гучн(?:ий|і|ые))\\s+(?:вибух|взрыв)",
+  "вибухи\\s+у","взрывы\\s+в",
+  "(?:здетонував|сдетонировал)","(?:зруйнован|разрушен)","(?:пошкоджен|поврежден)"
+].join("|"),"i");
+
+const FALLING_RE  = /падає|падають|падает|падают|падінн|зниженн|снижен|втрачає висоту|теряет высоту|збит|сбит|ліквідован|упал|упав|впав|курсом на землю|на\s+землю|збито|сбито/i;
+const NO_LAUNCH_RE = /без\s+пуск|без\s+запуск|не\s+було\s+пуск|поки\s+що\s+без|поки\s+без|не\s+спостеріга|не\s+наблюда|без\s+бойових\s+ознак|без\s+боевых\s+признак|очікуємо\s+відбій|очікуємо\s+отбой|відбій|отбой|тренувальн|навчальн|учбов|учебн|не\s+підтверджен|не\s+подтвержден|скасован|отменен|відмінено/i;
+const NON_AIR_CONTEXT_RE = new RegExp([
+  "диверс","партизан","АТЕШ","атеш","саботаж","підпал","поджог","підрив",
+  "електропідстанц","электроподстанц",
+  "нонсенс","немає\\s+ніяких","нема\\s+ніяких",
+  "реакцій\\s+на","реакций\\s+на",
+  "авіація\\s+НАТО","авиация\\s+НАТО","НАТО\\s+знищил","НАТО\\s+уничтож",
+  "над\\s+Литвою","над\\s+Литвой","в\\s+Литві","в\\s+Литве",
+  "над\\s+Польщ","в\\s+Польщ",
+  "після\\s+вибуху\\s+я","после\\s+взрыва\\s+я",
+  "боєць","боец\\b","батальйон","батальон","бригад",
+  "пішов\\s+на\\s+війну","пошел\\s+на\\s+войну",
+  "тримав\\s+позицію","держал\\s+позицию",
+  "перші\\s+дні\\s+повномасштабн","первые\\s+дни\\s+полномасштабн",
+  "повномасштабного\\s+вторгнення","полномасштабного\\s+вторжения",
+  "«Дик","«Дике","Дикого\\s+Поля",
+  "калібр\\s+зерн|калибр\\s+зерн",
+  "розібрал","разобрал","на\\s+частини","на\\s+части","дослідил","исследовал",
+  "вивчил","изучил","аналіз\\s+дрон","анализ\\s+дрон","модел[иьі]\\s+«","модель\\s+«",
+  "запчастин","комплектующ","імпортн","импортн","деталей","детали"
+].join("|"),"i");
+
+const LAUNCH_RE = /пуск|пуски|запуск|запуски|старт|стартував|уже\s+в\s+повітр|уже\s+в\s+воздух|в\s+повітрі|в\s+воздухе|відмічено|отмечен|зліт|злет|взлет|взліт|курсує|прямує|летить|рухається/i;
+const ACTION_RE = /курс|курсом|летит|летять|руха|рухається|напрям|в\s+напрямк|у\s+бік|у\s+напрямку|збит|сбит|пада|падінн|підліта|подлета|наближ|атак|удар|пуск|загроз|угроз|висот/i;
+const THREAT_RE = /загроза|угроза|можлив|возможн|готов|напоготові|готують|готується|підготовк|подготовк/i;
+const READY_RE  = /бойов[аоі]й?\s+готовност|боев[оа]й?\s+готовност|готов[іи]\s+до\s+застосування|готовы\s+к\s+применению|у\s+готовності|в\s+готовности/i;
+const DIRECTION_RE = /(?:у\s+напрямк|в\s+направлен|курс(?:ом)?\s+на|на\s+напрямк|у\s+бік|в\s+сторон|у\s+сторон|\bна\b|\bв\b)\s+([А-ЯІЇЄҐа-яіїєґ'’\-]+(?:\s+[А-ЯІЇЄҐа-яіїєґ][а-яіїєґ'’\-]+){0,3})/i;
+const OBSERVED_RE = /(?:повз|через|мимо|біля|возле|рядом\s+с|около|проходить\s+повз|пройшов\s+повз|над)\s+([А-ЯІЇЄҐа-яіїєґ'’\-][А-ЯІЇЄҐа-яіїєґ'’\-\s]{2,30})/i;
+
+const TOO_GENERIC_PLACES = new Set([
+  "київ", "киев", "kyiv",
+  "київська", "киевская", "київської", "киевской",
+  "україна", "украина"
+]);
+
+const DEFAULT_SOURCES = {
+  "missile":   { lat: 44.50, lon: 33.50, name: "Чорне море", region: "акваторія" },
+  "ballistic": { lat: 45.00, lon: 34.00, name: "Крим", region: "Крим" },
+  "banderol":  { lat: 45.30, lon: 34.50, name: "Крим", region: "Крим" },
+  "jet_drone": { lat: 45.30, lon: 34.50, name: "Крим", region: "Крим" },
+  "kab":       { lat: 47.50, lon: 38.00, name: "Схід", region: "фронт" },
+  "umpb":      { lat: 47.50, lon: 38.00, name: "Схід", region: "фронт" },
+  "uav":       { lat: 48.00, lon: 38.00, name: "Схід", region: "фронт" },
+  "recon":     { lat: 48.00, lon: 38.00, name: "Схід", region: "фронт" },
+  "fpv":       { lat: 47.50, lon: 37.00, name: "Фронт", region: "фронт" }
+};
+
+const PLACES = {
+  "оболонь":[50.52,30.50,"Оболонь"],"подол":[50.47,30.52,"Поділ"],
+  "печерськ":[50.43,30.54,"Печерськ"],"дарниц":[50.43,30.65,"Дарниця"],
+  "деснянськ":[50.52,30.60,"Деснянський"],"святошин":[50.46,30.35,"Святошин"],
+  "солом'ян":[50.43,30.48,"Солом'янка"],
+  "голосіїв":[50.39,30.51,"Голосіїв"],"троєщин":[50.52,30.58,"Троєщина"],
+  "позняки":[50.41,30.63,"Позняки"],"осокорки":[50.39,30.62,"Осокорки"],
+  "теремки":[50.37,30.45,"Теремки"],"академмістец":[50.47,30.36,"Академмістечко"],
+  "борщагів":[50.43,30.40,"Борщагівка"],"виноградар":[50.50,30.42,"Виноградар"],
+  "шевченківський район":[50.46,30.48,"Шевченківський р-н"],
+  "шевченківський":[50.46,30.48,"Шевченківський"],
+  "дврз":[50.428,30.662,"ДВРЗ"],
+  "дарниця":[50.43,30.65,"Дарниця"],
+  "вишеньки":[50.398,30.665,"Вишеньки"],
+  "водосховище":[50.500,30.570,"Водосховище"],
+  "киевское водохранилище":[50.500,30.570,"Киевское вдхр."],
+  "київське водосховище":[50.500,30.570,"Київське вдсх."],
+  "мишоловка":[50.376,30.505,"Мишоловка"],
+  "демиевка":[50.395,30.490,"Демиевка"],
+  "деміївка":[50.395,30.490,"Деміївка"],
+  "лісовий масив":[50.485,30.605,"Лісовий масив"],
+  "бортничі":[50.395,30.680,"Бортничі"],
+  "воскресенка":[50.465,30.605,"Воскресенка"],
+  "жуляни":[50.395,30.435,"Жуляни"],
+  "троя":[50.510,30.550,"Троя"],
+  "хрещатик":[50.448,30.522,"Хрещатик"],
+  "центр києва":[50.450,30.523,"Центр Києва"],
+  "центр киева":[50.450,30.523,"Центр Киева"],
+  "тец-4":[50.428,30.372,"ТЭЦ-4"],"тэц-4":[50.428,30.372,"ТЭЦ-4"],
+  "тец-5":[50.412,30.528,"ТЭЦ-5"],"тэц-5":[50.412,30.528,"ТЭЦ-5"],
+  "тец-6":[50.520,30.618,"ТЭЦ-6"],"тэц-6":[50.520,30.618,"ТЭЦ-6"],
+  "гатне":[50.354,30.383,"Гатне"],
+  "коцюбинське":[50.488,30.335,"Коцюбинське"],
+  "нивки":[50.458,30.405,"Нивки"],
+  "сирець":[50.475,30.425,"Сирець"],
+  "лук'янівка":[50.467,30.465,"Лук'янівка"],
+  "татарка":[50.470,30.480,"Татарка"],
+  "березняки":[50.435,30.595,"Березняки"],
+  "русанівка":[50.443,30.595,"Русанівка"],
+  "лівобережна":[50.445,30.615,"Лівобережна"],
+  "райдужний":[50.478,30.605,"Райдужний"],
+  "минский":[50.500,30.420,"Минский"],
+  "харківський":[50.420,30.650,"Харківський"],
+  "ірпінь":[50.52,30.25,"Ірпінь"],"буча":[50.55,30.22,"Буча"],
+  "гостомел":[50.57,30.27,"Гостомель"],"вишгород":[50.58,30.49,"Вишгород"],
+  "бровари":[50.51,30.79,"Бровари"],"бориспіль":[50.35,30.95,"Бориспіль"],
+  "вишнев":[50.39,30.37,"Вишневе"],"фастів":[50.07,29.92,"Фастів"],
+  "біла церква":[49.79,30.11,"Біла Церква"],"десна":[50.52,30.62,"Десна"],
+  "новгород-сіверський":[52.00,33.26,"Новгород-Сіверський"],
+  "чернігів":[51.50,31.29,"Чернігів"],"ніжин":[51.05,31.88,"Ніжин"],
+  "прилуки":[50.59,32.38,"Прилуки"],"ріпки":[51.83,31.15,"Ріпки"],
+  "козелець":[50.92,31.11,"Козелець"],"корюківка":[51.77,32.25,"Корюківка"],
+  "сновськ":[51.82,31.95,"Сновськ"],"семенівка":[52.18,32.58,"Семенівка"],
+  "городня":[51.89,31.60,"Городня"],
+  "сеньківка":[51.85,31.75,"Сеньківка"],
+  "суми":[50.91,34.80,"Суми"],"шустка":[51.87,33.47,"Шостка"],
+  "конотоп":[51.24,33.20,"Конотоп"],"ахтирка":[50.31,34.90,"Охтирка"],
+  "харків":[49.99,36.23,"Харків"],"чугуїв":[49.84,36.68,"Чугуїв"],
+  "ізюм":[49.21,37.28,"Ізюм"],"куп'янськ":[49.71,37.61,"Куп'янськ"],
+  "балаклія":[49.46,36.86,"Балаклія"],"лозова":[48.89,36.32,"Лозова"],
+  "дніпро":[48.46,35.04,"Дніпро"],"кривий ріг":[47.91,33.39,"Кривий Ріг"],
+  "павлоград":[48.53,35.87,"Павлоград"],"кам'янське":[48.51,34.60,"Кам'янське"],
+  "нікополь":[47.57,34.39,"Нікополь"],
+  "запоріжжя":[47.84,35.14,"Запоріжжя"],"бердянськ":[46.76,36.79,"Бердянськ"],
+  "мелітополь":[46.85,35.37,"Мелітополь"],"енергодар":[47.50,34.65,"Енергодар"],
+  "токмак":[47.25,35.71,"Токмак"],
+  "одеса":[46.48,30.73,"Одеса"],"чорноморськ":[46.30,30.65,"Чорноморськ"],
+  "ізмаїл":[45.35,28.84,"Ізмаїл"],"білгород-дністровський":[46.19,30.35,"Білгород-Дністровський"],
+  "южне":[46.62,31.00,"Южне"],"фонтанка":[46.55,30.85,"Фонтанка"],
+  "крижанівка":[46.55,30.80,"Крижанівка"],"пересип":[46.50,30.75,"Пересип"],
+  "миколаїв":[46.97,32.00,"Миколаїв"],"вознесенськ":[47.56,31.33,"Вознесенськ"],
+  "херсон":[46.64,32.62,"Херсон"],"нова каховка":[46.75,33.35,"Нова Каховка"],
+  "каховка":[46.81,33.48,"Каховка"],"генічеськ":[46.17,34.80,"Генічеськ"],
+  "львів":[49.84,24.03,"Львів"],"дрогобич":[49.35,23.50,"Дрогобич"],
+  "івано-франківськ":[48.92,24.71,"Івано-Франківськ"],"калуш":[49.02,24.37,"Калуш"],
+  "тернопіль":[49.55,25.60,"Тернопіль"],"хмельницький":[49.42,26.99,"Хмельницький"],
+  "вінниця":[49.23,28.47,"Вінниця"],"жмеринка":[49.04,28.11,"Жмеринка"],
+  "полтава":[49.59,34.55,"Полтава"],"кременчук":[49.06,33.42,"Кременчук"],
+  "миргород":[49.97,33.61,"Миргород"],"лубин":[50.02,32.99,"Лубни"],
+  "черкаси":[49.44,32.06,"Черкаси"],"сміла":[49.23,31.87,"Сміла"],
+  "кропивницький":[48.51,32.26,"Кропивницький"],"олександрія":[48.67,33.11,"Олександрія"],
+  "житомир":[50.25,28.66,"Житомир"],"бердичів":[49.90,28.60,"Бердичів"],
+  "коростень":[50.95,28.64,"Коростень"],"рівне":[50.62,26.25,"Рівне"],
+  "луцьк":[50.75,25.34,"Луцьк"],"ковель":[51.21,24.71,"Ковель"],
+  "ужгород":[48.62,22.29,"Ужгород"],"мукачево":[48.44,22.72,"Мукачево"],
+  "чернівці":[48.29,25.94,"Чернівці"],
+  "воронеж":[51.67,39.18,"Воронеж"],"ростов-на-дону":[47.24,39.70,"Ростов-на-Дону"],
+  "курск":[51.73,36.19,"Курск"],"белгород":[50.60,36.59,"Белгород"],
+  "брянск":[53.25,34.37,"Брянск"],"орёл":[52.97,36.06,"Орёл"],
+  "энгельс":[51.48,46.21,"Энгельс"],"украинка":[51.17,128.45,"Украинка"],
+  "гомель":[52.44,30.99,"Гомель"],"мозырь":[52.05,29.27,"Мозырь"],
+  "припять":[51.40,30.05,"Припять"],"славутич":[51.52,30.75,"Славутич"]
+};
+const PLACE_KEYS_BY_LEN = Object.keys(PLACES).sort((a,b) => b.length - a.length);
+
+const LAUNCH_AREAS = [
+  { name:"Курская обл.", lat:51.73, lon:36.19 },
+  { name:"Брянская обл.", lat:53.25, lon:34.37 },
+  { name:"Белгородская обл.", lat:50.60, lon:36.59 },
+  { name:"Ростовская обл.", lat:47.24, lon:39.70 },
+  { name:"Крым / Чёрное море", lat:45.0, lon:34.0 }
+];
+
+const RUSSIAN_ORIGINS = LAUNCH_ORIGINS.filter(o =>
+  /обл\.|край/i.test(o.region || "") && !/Крым|Крим/i.test(o.region || "")
+);
+const TRAIL_TYPES = new Set(["missile","ballistic","banderol","jet_drone"]);
+function needsTrail(type) { return TRAIL_TYPES.has(type); }
+function nearestRussianOrigin(lat, lon) {
+  let best = null, bestD = Infinity;
+  for (const o of RUSSIAN_ORIGINS) {
+    const d = haversineKm(lat, lon, o.lat, o.lon);
+    if (d < bestD) { bestD = d; best = o; }
+  }
+  return { origin: best, dist: bestD };
+}
+function computeTrailLatLngs(markerLat, markerLon, heading) {
+  const { origin, dist } = nearestRussianOrigin(markerLat, markerLon);
+  if (!origin) return null;
+  if (dist < CONFIG.TRAIL_MIN_ORIGIN_DIST_KM) return null;
+  const flightBearing = (heading != null) ? heading : bearingBetween(origin.lat, origin.lon, markerLat, markerLon);
+  const trailBearing = (flightBearing + 180) % 360;
+  const trailKm = Math.min(dist, CONFIG.TRAIL_MAX_KM);
+  const startOffset = CONFIG.TRAIL_START_OFFSET_KM || 2;
+  const start = destPoint(markerLat, markerLon, trailBearing, startOffset);
+  const end   = destPoint(markerLat, markerLon, trailBearing, trailKm);
+  return [[start[0], start[1]], [end[0], end[1]]];
+}
+
+const $ = id => document.getElementById(id);
+const esc = s => (s||"").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+function showToast(msg, ms = 2200) {
+  const t = $("toast"); if (!t) return;
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove("show"), ms);
+}
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371, toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+function bearingBetween(lat1, lon1, lat2, lon2) {
+  const φ1 = lat1*Math.PI/180, φ2 = lat2*Math.PI/180;
+  const Δλ = (lon2-lon1)*Math.PI/180;
+  const y = Math.sin(Δλ)*Math.cos(φ2);
+  const x = Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
+  return (Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+function destPoint(lat, lon, bearingDeg, distKm) {
+  const R = 6371, br = bearingDeg*Math.PI/180;
+  const lat1 = lat*Math.PI/180, lon1 = lon*Math.PI/180;
+  const lat2 = Math.asin(Math.sin(lat1)*Math.cos(distKm/R) +
+    Math.cos(lat1)*Math.sin(distKm/R)*Math.cos(br));
+  const lon2 = lon1 + Math.atan2(Math.sin(br)*Math.sin(distKm/R)*Math.cos(lat1),
+    Math.cos(distKm/R)-Math.sin(lat1)*Math.sin(lat2));
+  return [lat2*180/Math.PI, lon2*180/Math.PI];
+}
+function nearestLaunch(lat, lon) {
+  let best = LAUNCH_AREAS[0], bestD = Infinity;
+  for (const a of LAUNCH_AREAS) {
+    const d = (a.lat-lat)**2 + (a.lon-lon)**2;
+    if (d < bestD) { bestD = d; best = a; }
+  }
+  return best;
+}
+function findNearestPlace(lat, lon, maxKm) {
+  if (lat == null || lon == null) return null;
+  const limit = maxKm != null ? maxKm : CONFIG.NEAREST_PLACE_MAX_KM;
+  let best = null, bestD = Infinity;
+  for (const key of PLACE_KEYS_BY_LEN) {
+    const p = PLACES[key];
+    const d = haversineKm(lat, lon, p[0], p[1]);
+    if (d < bestD) { bestD = d; best = { key, name: p[2], lat: p[0], lon: p[1], distKm: d }; }
+  }
+  if (best && best.distKm <= limit) return best;
+  return null;
+}
+function findPlaceInText(text) {
+  const low = (text || "").toLowerCase().replace(/[’`´]/g, "'");
+  for (const key of PLACE_KEYS_BY_LEN) {
+    const idx = low.indexOf(key);
+    if (idx < 0) continue;
+    const before = idx > 0 ? low[idx - 1] : " ";
+    const after = idx + key.length < low.length ? low[idx + key.length] : " ";
+    const okBefore = /[^а-яіїєґa-z]/i.test(before) || before === " ";
+    const okAfter = /[^а-яіїєґa-z]/i.test(after) || after === " ";
+    if (!okBefore || !okAfter) continue;
+    const [lat, lon, name] = PLACES[key];
+    return { key, name, lat, lon, index: idx, length: key.length };
+  }
+  return null;
+}
+function findRegionInText(text) {
+  const t = text || "";
+  for (const r of REGIONS) if (r.re.test(t)) return r;
+  return null;
+}
+function findLaunchOriginsInText(text) {
+  const t = text || "";
+  const found = [];
+  for (const o of LAUNCH_ORIGINS) {
+    const re = new RegExp(o.re.source, o.re.flags.includes("g") ? o.re.flags : o.re.flags + "g");
+    let m;
+    while ((m = re.exec(t)) !== null) {
+      found.push({ ...o, index: m.index, length: m[0].length });
+      if (!re.global) break;
+    }
+  }
+  const seen = new Set();
+  return found
+    .filter(o => { if (seen.has(o.key)) return false; seen.add(o.key); return true; })
+    .sort((a,b) => a.index - b.index);
+}
+function findDirectionTarget(text) {
+  const m = DIRECTION_RE.exec(text || "");
+  if (!m) return null;
+  const target = m[1].trim().toLowerCase();
+  for (const key of PLACE_KEYS_BY_LEN) {
+    if (target.includes(key) || key.includes(target)) {
+      const [lat, lon, name] = PLACES[key];
+      return { key, name, lat, lon };
+    }
+  }
+  return null;
+}
+function parseAircraftCount(text) {
+  if (!text) return null;
+  let m = text.match(/(\d+)\s*(?:борт|борти|літак|самолет|ед\.|шт\.)/i);
+  if (m) return parseInt(m[1], 10);
+  m = text.match(/(\d+)\s*[хx×]\s*(?:ту-?\s*95|ту-?\s*160|ту-?\s*22)/i);
+  if (m) return parseInt(m[1], 10);
+  m = text.match(/(\d+)\s+(?:ту-?\s*95|ту-?\s*160|ту-?\s*22)/i);
+  if (m) return parseInt(m[1], 10);
+  return null;
+}
+function parseAltitude(t) {
+  if (typeof t.altitude === "number") return Math.round(t.altitude);
+  if (typeof t.alt === "number") return Math.round(t.alt);
+  if (typeof t.height === "number") return Math.round(t.height);
+  const text = [t.title, t.explanationShort, t.region, t.locality].filter(Boolean).join(" ");
+  if (!text) return null;
+  let m = text.match(/(?:висот[аіиою]|высот[аеыою]|на\s+висот[іи]|на\s+высот[е]|висотою\s+в?|высотою\s+в?|висота\s+в?|высота\s+в?)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(км|km|м|m)\b/i);
+  if (m) {
+    const v = parseFloat(m[1].replace(",", "."));
+    const unit = m[2].toLowerCase();
+    let meters = (unit === "км" || unit === "km") ? v * 1000 : v;
+    if (meters >= 50 && meters <= 20000) return Math.round(meters);
+  }
+  m = text.match(/(\d+(?:[.,]\d+)?)\s*[-–—]\s*(\d+(?:[.,]\d+)?)\s*(км|km|м|m)\b/i);
+  if (m) {
+    const a = parseFloat(m[1].replace(",", "."));
+    const b = parseFloat(m[2].replace(",", "."));
+    const unit = m[3].toLowerCase();
+    let avg = (a + b) / 2;
+    if (unit === "км" || unit === "km") avg *= 1000;
+    if (avg >= 50 && avg <= 20000) return Math.round(avg);
+  }
+  m = text.match(/(?:alt(?:itude)?|h)\s*[:=]\s*(\d+(?:[.,]\d+)?)\s*(км|km|м|m)?/i);
+  if (m) {
+    const v = parseFloat(m[1].replace(",", "."));
+    const unit = (m[2] || "м").toLowerCase();
+    let meters = (unit === "км" || unit === "km") ? v * 1000 : v;
+    if (meters >= 50 && meters <= 20000) return Math.round(meters);
+  }
+  m = text.match(/(?:бандерол|крилат|шахед|бпла|дрон|герань|каб|ракет|реактив)[^.,;]{0,30}?\b(\d{3,5})\b(?!\s*(?:м|m|км|km|грн|₴|%))/i);
+  if (m) {
+    const v = parseInt(m[1], 10);
+    if (v >= 100 && v <= 15000) return v;
+  }
+  m = text.match(/(\d+(?:[.,]\d+)?)\s*(?:км|km)\b/i);
+  if (m) {
+    const v = parseFloat(m[1].replace(",", ".")) * 1000;
+    if (v >= 50 && v <= 20000) return Math.round(v);
+  }
+  m = text.match(/(\d{3,5})\s*(?:м|m\b)/i);
+  if (m) {
+    const v = parseInt(m[1],10);
+    if (v >= 50 && v <= 20000) return v;
+  }
+  return null;
+}
+function isFallingMessage(text) { return FALLING_RE.test(text || ""); }
+function formatAlt(alt) {
+  if (alt == null) return "";
+  return alt >= 1000 ? (alt/1000).toFixed(1).replace(/\.0$/, "") + " км" : alt + " м";
+}
+function formatEta(min) {
+  if (min < 0.5) return "< 1 мин";
+  if (min < 60) return `~${Math.round(min)} мин`;
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return `~${h} ч ${m} мин`;
+}
+function placeAndTypeClose(text, placeMatch, typeMatch, windowChars = 100) {
+  if (!placeMatch || !typeMatch) return false;
+  const pEnd = placeMatch.index + placeMatch[0].length;
+  const tStart = typeMatch.index;
+  const tEnd = tStart + typeMatch[0].length;
+  const gap = pEnd <= tStart ? (tStart - pEnd) : (placeMatch.index - tEnd);
+  return gap >= 0 && gap <= windowChars;
+}
+function placeCloseEnough(text, placeMatch, typeMatch, windowChars) {
+  return placeAndTypeClose(text, placeMatch, typeMatch, windowChars);
+}
+function parseEventTime(text, msgDate) {
+  if (!text) return null;
+  const t = text;
+  const msgMs = msgDate ? Date.parse(msgDate) : null;
+  const msgDateObj = msgMs ? new Date(msgMs) : null;
+  let m = t.match(/(?:^|\s|[оавОАВуУ])\s*(\d{1,2}):(\d{2})(?:\s|$|,|\.|\))/);
+  if (m) {
+    const hh = parseInt(m[1], 10), mm = parseInt(m[2], 10);
+    if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59 && msgDateObj) {
+      const d = new Date(msgDateObj);
+      d.setHours(hh, mm, 0, 0);
+      if (d.getTime() > msgMs + 5 * 60 * 1000) d.setDate(d.getDate() - 1);
+      return d.getTime();
+    }
+  }
+  m = t.match(/(\d{1,3})\s*(?:хв(?:илин[уи]?)?|мин(?:ут[уы]?)?|min)\s*(?:назад|тому|тому\s+назад|раніше|ранее)/i);
+  if (m) return (msgMs || Date.now()) - parseInt(m[1],10) * 60 * 1000;
+  m = t.match(/(\d{1,2})\s*(?:час(?:ов|а|у|и)?|год(?:ин[уи]?)?|годин[уи]?|ч(?:\.)?)\s*(?:назад|тому|раніше|ранее)/i);
+  if (m) return (msgMs || Date.now()) - parseInt(m[1],10) * 3600 * 1000;
+  if (/щойно|тільки\s+що|только\s+что|прямо\s+зараз|сій\s+хвилині/i.test(t)) return msgMs || Date.now();
+  if (/пів\s*години\s*тому|полчаса\s*назад|пол\s*годины\s*назад/i.test(t)) return (msgMs || Date.now()) - 30 * 60 * 1000;
+  m = t.match(/(\d{1,2})[.\-/](\d{1,2})(?:[.\-/](\d{2,4}))?\s*[,\s]\s*(\d{1,2}):(\d{2})/);
+  if (m) {
+    const dd = parseInt(m[1],10), mm = parseInt(m[2],10) - 1;
+    let yyyy = m[3] ? parseInt(m[3],10) : (msgDateObj ? msgDateObj.getFullYear() : new Date().getFullYear());
+    if (yyyy < 100) yyyy += 2000;
+    const hh = parseInt(m[4],10), mi = parseInt(m[5],10);
+    if (dd>=1 && dd<=31 && mm>=0 && mm<=11 && hh>=0 && hh<=23 && mi>=0 && mi<=59) {
+      return new Date(yyyy, mm, dd, hh, mi, 0, 0).getTime();
+    }
+  }
+  return null;
+}
+function formatAgeShort(ms) {
+  if (ms < 0) return "щойно";
+  const s = Math.floor(ms/1000);
+  if (s < 60) return "щойно";
+  const m = Math.floor(s/60);
+  if (m < 60) return m + " хв тому";
+  const h = Math.floor(m / 60);
+  return h + " год тому";
+}
+
+function parsePlaceAndAltitude(text) {
+  if (!text) return null;
+  var raw = String(text).trim();
+  if (!raw || raw.length > 60) return null;
+  raw = raw.replace(/^[•·\-–—\s]+/, "").replace(/[\s]+$/, "");
+  var m = raw.match(/^([А-ЯІЇЄҐа-яіїєґ'’\-][А-ЯІЇЄҐа-яіїєґ'’\-\s]{1,30}?)\s+(\d{1,5})\s*$/i);
+  if (!m) return null;
+  var placeName = m[1].trim();
+  var altRaw = parseInt(m[2], 10);
+  var alt = null;
+  if (altRaw >= 500 && altRaw <= 15000) alt = altRaw;
+  else if (altRaw >= 1 && altRaw <= 15) alt = altRaw * 1000;
+  if (!alt) return null;
+  var place = findPlaceInText(placeName);
+  if (place) return { place: place, altitude: alt };
+  return null;
+}
+function isJustAltitude(text) {
+  if (!text) return null;
+  var raw = String(text).trim();
+  if (raw.length > 8) return null;
+  var m = raw.match(/^(\d{3,5})\s*$/);
+  if (!m) return null;
+  var v = parseInt(m[1], 10);
+  if (v >= 500 && v <= 15000) return v;
+  return null;
+}
+
+const map = L.map("map", { center: CONFIG.KYIV, zoom: 8, zoomControl: true, attributionControl: true });
+L.tileLayer(CONFIG.TILE_URL, { maxZoom: 19, attribution: CONFIG.TILE_ATTR }).addTo(map);
+
+L.circle(CONFIG.KYIV, { radius: CONFIG.ZONE_RADIUS_KM * 1000, className:"zone-circle", interactive:false }).addTo(map);
+
+const alertLayer    = L.layerGroup().addTo(map);
+const threatLayer   = L.layerGroup().addTo(map);
+const msgThreatLayer= L.layerGroup().addTo(map);
+const impactLayer   = L.layerGroup().addTo(map);
+const trailLayer    = L.layerGroup().addTo(map);
+
+const GeoIndex = {
+  raionMap: null, oblastMap: null,
+  build(geojson, targetMap) {
+    const m = new Map();
+    for (const f of (geojson?.features || [])) {
+      const k = String(f.properties?.key || "").toLowerCase().trim();
+      if (k) m.set(k, f);
+    }
+    targetMap(m);
+  },
+  find(key) {
+    if (!key) return null;
+    const k = String(key).toLowerCase().trim();
+    if (this.raionMap?.has(k)) return this.raionMap.get(k);
+    if (this.oblastMap?.has(k)) return this.oblastMap.get(k);
+    for (const [pk, f] of (this.raionMap || [])) if (k.endsWith(":"+pk) || k.includes(pk)) return f;
+    for (const [pk, f] of (this.oblastMap || [])) if (k.endsWith(":"+pk) || k.includes(pk)) return f;
+    return null;
+  }
+};
+let lastAlerts = null;
+async function loadAlertGeo(signal) {
+  try {
+    const [r, o] = await Promise.all([
+      fetch("https://neptun.in.ua/raions.geojson", { signal }).then(x => x.json()),
+      fetch("https://neptun.in.ua/oblasts.geojson", { signal }).then(x => x.json())
+    ]);
+    GeoIndex.build(r, m => GeoIndex.raionMap = m);
+    GeoIndex.build(o, m => GeoIndex.oblastMap = m);
+    if (lastAlerts) syncAlertPolygons(lastAlerts);
+  } catch (e) { if (e.name !== "AbortError") console.warn("alert geojson", e); }
+}
+
+const alertPolygons = new Map();
+function alertStyle(level) {
+  const lv = (level || "red").toLowerCase();
+  if (lv === "yellow" || lv === "orange") {
+    return { color:"#ca8a04", weight:1, opacity:.7, fillColor:"#eab308", fillOpacity:.22 };
+  }
+  return { color:"#b91c1c", weight:1, opacity:.7, fillColor:"#ef4444", fillOpacity:.24 };
+}
+function syncAlertPolygons(alerts) {
+  if (!alerts) return;
+  lastAlerts = alerts;
+  if (!GeoIndex.raionMap && !GeoIndex.oblastMap) return;
+  const active = new Map();
+  for (const a of (alerts.raions || [])) {
+    const k = a.key || a.name;
+    if (k) active.set(String(k).toLowerCase(), { level: a.level || "red", name: a.name, reasons: a.reasons });
+  }
+  for (const a of (alerts.oblasts || [])) {
+    const k = a.key || a.name;
+    if (k) active.set(String(k).toLowerCase(), { level: a.level || "red", name: a.name, reasons: a.reasons });
+  }
+  for (const [k, layer] of [...alertPolygons]) {
+    if (!active.has(k)) { alertLayer.removeLayer(layer); alertPolygons.delete(k); }
+  }
+  for (const [k, info] of active) {
+    const feat = GeoIndex.find(k);
+    if (!feat) continue;
+    const style = alertStyle(info.level);
+    const lv = (info.level || "red").toLowerCase();
+    const lvLabel = (lv==="yellow"||lv==="orange") ? "жовтий" : "червоний";
+    const lvColor = (lv==="yellow"||lv==="orange") ? "#ca8a04" : "#ef4444";
+    const title = info.name || (feat.properties && (feat.properties.rayon || feat.properties.region)) || k;
+    const reason = (info.reasons && info.reasons[0]) ? "<br>"+esc(info.reasons[0]) : "";
+    if (alertPolygons.has(k)) alertPolygons.get(k).setStyle(style);
+    else {
+      const layer = L.geoJSON(feat, { style });
+      layer.bindPopup(`<b>${esc(title)}</b><br>Тривога: <span style="color:${lvColor}">${lvLabel}</span>${reason}`);
+      layer.addTo(alertLayer);
+      alertPolygons.set(k, layer);
+    }
+  }
+}
+
+function uavSvg() {
+  return `<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+    <path d="M20 4 L30 22 L24 24 L24 32 L20 30 L16 32 L16 24 L10 22 Z" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.8" stroke-linejoin="round"/>
+    <path d="M12 20 L6 26 L10 27 Z" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.4" stroke-linejoin="round"/>
+    <path d="M28 20 L34 26 L30 27 Z" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.4" stroke-linejoin="round"/>
+  </svg>`;
+}
+function migSvg() {
+  return `<svg viewBox="0 0 44 40" xmlns="http://www.w3.org/2000/svg">
+    <path d="M22 3 L25 14 L38 18 L38 22 L25 22 L25 30 L30 34 L28 36 L22 33 L16 36 L14 34 L19 30 L19 22 L6 22 L6 18 L19 14 Z" fill="#e11d48" stroke="#1a1a1a" stroke-width="1.2" stroke-linejoin="round"/>
+    <circle cx="22" cy="20" r="2" fill="#fff" stroke="#1a1a1a" stroke-width="0.6"/>
+  </svg>`;
+}
+function stratSvg() {
+  return `<svg viewBox="0 0 44 40" xmlns="http://www.w3.org/2000/svg">
+    <path d="M22 4 L24 15 L40 20 L40 23 L24 22 L24 30 L28 34 L26 36 L22 33 L18 36 L16 34 L20 30 L20 22 L4 23 L4 20 L20 15 Z" fill="#ea580c" stroke="#1a1a1a" stroke-width="1.2" stroke-linejoin="round"/>
+    <circle cx="22" cy="18" r="2.2" fill="#fff" stroke="#1a1a1a" stroke-width="0.6"/>
+    <circle cx="22" cy="26" r="1.4" fill="#fff" stroke="#1a1a1a" stroke-width="0.5"/>
+  </svg>`;
+}
+function rocketSvg(color) {
+  return `<svg viewBox="0 0 24 40" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 1 C14 1 16 6 16 12 L16 26 L19 32 L16 30 L16 34 L12 38 L8 34 L8 30 L5 32 L8 26 L8 12 C8 6 10 1 12 1 Z" fill="${color}" stroke="#1a1a1a" stroke-width="1.1" stroke-linejoin="round"/>
+    <path d="M8 18 L3 24 L8 23 Z" fill="${color}" stroke="#1a1a1a" stroke-width="1" stroke-linejoin="round"/>
+    <path d="M16 18 L21 24 L16 23 Z" fill="${color}" stroke="#1a1a1a" stroke-width="1" stroke-linejoin="round"/>
+    <circle cx="12" cy="10" r="1.6" fill="#fff" stroke="#1a1a1a" stroke-width="0.6"/>
+  </svg>`;
+}
+function kabSvg(color) {
+  return `<svg viewBox="0 0 36 20" xmlns="http://www.w3.org/2000/svg">
+    <path d="M4 10 C4 6 6 4 10 4 L20 4 L28 2 L32 6 L34 10 L32 14 L28 18 L20 16 L10 16 C6 16 4 14 4 10 Z" fill="${color}" stroke="#1a1a1a" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M28 2 L32 6 M28 18 L32 14" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <circle cx="10" cy="10" r="2" fill="#fff" stroke="#1a1a1a" stroke-width="0.7"/>
+  </svg>`;
+}
+function umpbSvg(color) {
+  return `<svg viewBox="0 0 44 16" xmlns="http://www.w3.org/2000/svg">
+    <path d="M4 8 C4 5 6 3 10 3 L24 3 L30 1 L36 3 L40 8 L36 13 L30 15 L24 13 L10 13 C6 13 4 11 4 8 Z" fill="${color}" stroke="#1a1a1a" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M12 6 L10 2 L16 3 M12 10 L10 14 L16 13" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <circle cx="10" cy="8" r="1.8" fill="#fff" stroke="#1a1a1a" stroke-width="0.6"/>
+  </svg>`;
+}
+function fpvSvg(color) {
+  return `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <rect x="9" y="10" width="6" height="4" rx="1" fill="${color}"/>
+    <circle cx="5" cy="8" r="2.3" fill="${color}"/>
+    <circle cx="19" cy="8" r="2.3" fill="${color}"/>
+    <circle cx="5" cy="16" r="2.3" fill="${color}"/>
+    <circle cx="19" cy="16" r="2.3" fill="${color}"/>
+    <path d="M7 9 L9.5 11 M17 9 L14.5 11 M7 15 L9.5 13 M17 15 L14.5 13" stroke="${color}" stroke-width="1.6" fill="none"/>
+  </svg>`;
+}
+function launcherSvg(color) {
+  return `<svg viewBox="0 0 40 32" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="20" width="36" height="8" rx="2" fill="#334155" stroke="#0f172a" stroke-width="1.2"/>
+    <circle cx="10" cy="29" r="2.6" fill="#0f172a"/>
+    <circle cx="20" cy="29" r="2.6" fill="#0f172a"/>
+    <circle cx="30" cy="29" r="2.6" fill="#0f172a"/>
+    <rect x="6" y="15" width="12" height="5" rx="1" fill="#475569" stroke="#0f172a" stroke-width="1"/>
+    <line x1="10" y1="18" x2="34" y2="4" stroke="#0f172a" stroke-width="3.4" stroke-linecap="round"/>
+    <line x1="10" y1="18" x2="34" y2="4" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+    <polygon points="33,2 38,3 35,7" fill="${color}" stroke="#0f172a" stroke-width="1"/>
+  </svg>`;
+}
+function impactSvg() {
+  return `<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="20" cy="20" r="9" fill="#dc2626" stroke="#7f1d1d" stroke-width="1.5"/>
+    <circle cx="20" cy="20" r="4" fill="#fbbf24"/>
+    <g stroke="#b91c1c" stroke-width="2.4" stroke-linecap="round">
+      <line x1="20" y1="2"  x2="20" y2="9"/>
+      <line x1="20" y1="31" x2="20" y2="38"/>
+      <line x1="2"  y1="20" x2="9"  y2="20"/>
+      <line x1="31" y1="20" x2="38" y2="20"/>
+      <line x1="7"  y1="7"  x2="12" y2="12"/>
+      <line x1="28" y1="28" x2="33" y2="33"/>
+      <line x1="33" y1="7"  x2="28" y2="12"/>
+      <line x1="12" y1="28" x2="7"  y2="33"/>
+    </g>
+  </svg>`;
+}
+
+const TYPE_META = {
+  uav:                { color:"#ffffff", label:"БПЛА", icon:uavSvg, isUav:true },
+  recon:              { color:"#ffffff", label:"Розв", icon:uavSvg, isUav:true },
+  fpv:                { color:"#ca8a04", label:"FPV", icon:fpvSvg },
+  missile:            { color:"#dc2626", label:"КР", icon:rocketSvg, isMissile:true },
+  ballistic:          { color:"#b91c1c", label:"Бал", icon:rocketSvg, isMissile:true },
+  banderol:           { color:"#dc2626", label:"S8000", icon:rocketSvg, isMissile:true, isBanderol:true },
+  jet_drone:          { color:"#b91c1c", label:"Реакт. Герань", icon:rocketSvg, isMissile:true, isJetDrone:true },
+  kab:                { color:"#dc2626", label:"КАБ", icon:kabSvg, isMissile:true, isKAB:true },
+  umpb:               { color:"#7c2d12", label:"УМПБ-5", icon:umpbSvg, isMissile:true, isKAB:true },
+  mig31k:             { color:"#e11d48", label:"МиГ-31К", icon:migSvg, isMig:true },
+  strategic_aviation: { color:"#ea580c", label:"Стратег. авиация", icon:stratSvg, isStrategic:true },
+  awacs:              { color:"#0ea5e9", label:"А-50У", icon:uavSvg, isAwacs:true },
+  launcher:           { color:"#dc2626", label:"Пуск", icon:launcherSvg, isLauncher:true },
+  impact:             { color:"#dc2626", label:"Взрыв", icon:impactSvg, isImpact:true },
+  unknown:            { color:"#475569", label:"?", icon:uavSvg, isUav:true }
+};
+const getMeta = t => TYPE_META[t] || TYPE_META.unknown;
+
+function typeLabel(threat) {
+  if (threat._geran5) return "Г-5";
+  const t = threat.type;
+  if (t==="missile") return "КР";
+  if (t==="ballistic") return "Бал";
+  if (t==="banderol") return "S8000";
+  if (t==="jet_drone") return "Реакт.Г";
+  if (t==="kab") return "КАБ";
+  if (t==="umpb") return "УМПБ";
+  if (t==="fpv") return "FPV";
+  if (t==="uav") return "БПЛА";
+  if (t==="recon") return "Розв";
+  if (t==="mig31k") return "МиГ";
+  if (t==="awacs") return "А-50У";
+  if (t==="strategic_aviation") return "Ту-95/160";
+  if (t==="launcher") return "Пуск";
+  if (t==="impact") return "Взрыв";
+  return "";
+}
+
+const SIZE_BASE = 28;
+
+/* v14.16.9: класс бейджа по количеству подтверждений */
+function confirmBadgeClass(count, totalWeight) {
+  if (count >= 5 || totalWeight >= 8.0) return "max";
+  if (count >= 3 || totalWeight >= 4.5) return "strong";
+  if (count >= 2 && totalWeight >= 2.0) return "";
+  if (count >= 2) return "medium";
+  return "low";
+}
+/* v14.16.9: класс усиления иконки */
+function confirmBoostClass(count, totalWeight) {
+  if (count >= 5 || totalWeight >= 8.0) return "confirm-5";
+  if (count >= 3 || totalWeight >= 4.5) return "confirm-3";
+  if (count >= 2 && totalWeight >= 2.0) return "confirm-2";
+  return "";
+}
+
+function channelsListHtml(channelsSet) {
+  const items = [...channelsSet].map(ch => {
+    const cls = channelClass(ch);
+    const w = channelWeight(ch);
+    const label = w >= 1.5 ? `⭐ ${ch}` : w < 1.0 ? `⚠ ${ch}` : ch;
+    return `<span class="ch ${cls}">${esc(label)}</span>`;
+  });
+  return `<div class="popup-channels"><b>Источники (${channelsSet.size}):</b><br>${items.join(" ")}</div>`;
+}
+function kyivAreaLineHtml(area, prefix = "🏙") {
+  if (!area) return "";
+  const bank = area.bank === "left" ? "лівий" : area.bank === "right" ? "правий" : "";
+  const dist = area.district ? ` · ${esc(area.district)}` : "";
+  const b = bank ? ` · ${bank} берег` : "";
+  return `${prefix} <b>${esc(area.name)}</b>${dist}${b}`;
+}
+
+function makeIcon(threat, heading, isGuess, confirmations, totalWeight, eta, stale, advisory, areaOnly, uncertain) {
+  const meta = getMeta(threat.type);
+  const h = heading != null ? heading : 0;
+  let rot = h;
+  if (meta.noseEast || meta.isKAB) rot = h - 90;
+  if (meta.isUav || meta.isMig || meta.isStrategic || meta.isAwacs) rot = h;
+
+  const isUav = !!meta.isUav;
+  const svg = isUav ? meta.icon() : meta.icon(meta.color);
+  const arrow = (heading != null && !threat._falling && !meta.isLauncher && !meta.isMig && !meta.isStrategic && !areaOnly)
+    ? `<div class="dir-arrow"></div>` : "";
+
+  const alt = threat._altitude;
+  const falling = !!threat._falling;
+  const stage = threat._stage;
+  const lbl = typeLabel(threat);
+  const isObservation = OBSERVATION_TYPES.has(threat.type);
+
+  const iconClasses = ["threat-icon"];
+  if (falling) iconClasses.push("falling");
+  if (stage === "threat") iconClasses.push("threat-pulse");
+  if (meta.isStrategic) iconClasses.push("strat-pulse");
+  if (isObservation) iconClasses.push("observation");
+  if (stale) iconClasses.push("stale");
+  if (advisory) iconClasses.push("advisory");
+  if (areaOnly) iconClasses.push("area-only");
+  if (uncertain) iconClasses.push("uncertain");
+
+  /* v14.16.9: усиление по подтверждениям */
+  const boost = confirmBoostClass(confirmations, totalWeight);
+  if (boost) iconClasses.push(boost);
+
+  const badgeColor = meta.isStrategic ? "#9a3412" :
+                     meta.isMissile ? "#7f1d1d" :
+                     meta.isMig ? "#7c2d12" :
+                     meta.isAwacs ? "#0369a1" : "#1e293b";
+  const badgeBorder = meta.isStrategic ? "#ea580c" :
+                      meta.isMissile ? "#dc2626" :
+                      meta.isMig ? "#ea580c" :
+                      meta.isAwacs ? "#0ea5e9" : "#94a3b8";
+  const labelHtml = lbl
+    ? `<div style="position:absolute;left:50%;top:100%;margin-top:2px;transform:translateX(-50%);
+        background:${badgeColor};color:#fff;font-size:8px;font-weight:800;
+        padding:1px 4px;border-radius:3px;border:1px solid ${badgeBorder};white-space:nowrap">${lbl}</div>`
+    : "";
+
+  const altClass = alt == null ? "" : (alt <= 300 ? " low" : (alt <= 1000 ? " med" : ""));
+  const altHtml = alt != null
+    ? `<div class="alt-badge${altClass}">${formatAlt(alt)}</div>` : "";
+
+  const etaHtml = (eta != null && eta > 0 && eta < 600 && !isObservation && !areaOnly)
+    ? `<div class="eta-badge">${formatEta(eta)}</div>` : "";
+
+  const fallingHtml = falling ? `<div class="falling-badge">↓ ПАДАЄ</div>` : "";
+  const staleHtml = stale ? `<div class="stale-badge">⌛ ДАНІ СТАРІ</div>` : "";
+  const advisoryHtml = advisory ? `<div class="advisory-badge">ℹ СПОСТЕРЕЖЕННЯ</div>` : "";
+  const areaHtml = areaOnly ? `<div class="area-badge">≈ ОБЛАСТЬ</div>` : "";
+  const kyivHtml = threat._kyivArea ? `<div class="kyiv-badge">🏙 ${esc(threat._kyivArea.name)}</div>` : "";
+
+  const countHtml = threat._count
+    ? `<div class="count-badge">${threat._count}</div>` : "";
+
+  /* v14.16.9: бейдж подтверждений с усилением */
+  let confirmHtml = "";
+  if (confirmations) {
+    if (stage === "threat" && confirmations === 1) {
+      confirmHtml = `<div class="confirm-badge pending">⏱</div>`;
+    } else if (confirmations >= CONFIG.MIN_CHANNELS_CONFIRM) {
+      confirmHtml = `<div class="confirm-badge ${confirmBadgeClass(confirmations, totalWeight || 0)}">${confirmations}</div>`;
+    }
+  }
+
+  let stageHtml = "";
+  if (isObservation) {
+    stageHtml = `<div class="stage-badge observe" style="top:100%;bottom:auto;margin-top:16px">👁 СПОСТЕРЕЖЕННЯ</div>`;
+  } else if (stage === "threat") stageHtml = `<div class="stage-badge warn" style="top:100%;bottom:auto;margin-top:16px">⚠ ЗАГРОЗА</div>`;
+  else if (stage === "launch") stageHtml = `<div class="stage-badge" style="top:100%;bottom:auto;margin-top:16px">🚀 ПУСК</div>`;
+  else if (stage === "takeoff") stageHtml = `<div class="stage-badge takeoff" style="top:100%;bottom:auto;margin-top:16px">✈ ВЗЛЁТ</div>`;
+  else if (stage === "ready") stageHtml = `<div class="stage-badge ready" style="top:100%;bottom:auto;margin-top:16px">⚠ ГОТОВНІСТЬ</div>`;
+
+  const html = `<div style="position:relative;width:${SIZE_BASE}px;height:${SIZE_BASE}px">
+    <div class="${iconClasses.join(" ")}" style="position:absolute;inset:0;transform: rotate(${rot}deg)">${arrow}${svg}</div>
+    ${labelHtml}${altHtml}${etaHtml}${fallingHtml}${staleHtml}${advisoryHtml}${areaHtml}${kyivHtml}${confirmHtml}${countHtml}${stageHtml}
+  </div>`;
+
+  return L.divIcon({
+    className:"", html,
+    iconSize: [SIZE_BASE, SIZE_BASE],
+    iconAnchor: [SIZE_BASE/2, SIZE_BASE/2],
+    popupAnchor: [0, -SIZE_BASE/2]
+  });
+}
+
+function buildPopupHtml(opts) {
+  const {
+    cls, sampleText, place, targetPlace, eta, altitude,
+    confirmN, totalWeight, channels, firstSeen, lastSeen, isGuess, isAreaOnly,
+    isMig, isStrategic, isLaunchEvent, launchOriginLabel, launchBearing
+  } = opts;
+
+  const meta = getMeta(cls.type);
+  const label = cls.label;
+
+  const placeInfo = place && place.lat != null && place.lon != null
+    ? findNearestPlace(place.lat, place.lon) : null;
+  const nearestName = placeInfo ? placeInfo.name : (place ? place.name : "—");
+
+  const firstSeenHtml = firstSeen ? `🕓 вперше помічена ${formatAgeShort(Date.now() - firstSeen)}` : "";
+  const lastSeenHtml = lastSeen ? `🕓 оновлено ${formatAgeShort(Date.now() - lastSeen)}` : "";
+  const timeHtml = (firstSeenHtml || lastSeenHtml)
+    ? `<div class="popup-time">${firstSeenHtml}${firstSeenHtml && lastSeenHtml ? " · " : ""}${lastSeenHtml}</div>`
+    : "";
+
+  const altHtml = altitude != null ? `<div class="popup-alt">📍 Висота: <b>${formatAlt(altitude)}</b></div>` : "";
+
+  let placeHtml = "";
+  if (nearestName && nearestName !== "—") {
+    placeHtml = `<div class="popup-place">📍 ≈ ${esc(nearestName)}${isGuess ? " (орієнтовно)" : ""}</div>`;
+  }
+
+  const targetHtml = (targetPlace && targetPlace.name && targetPlace.name !== nearestName)
+    ? `<div class="popup-place" style="background:rgba(220,38,38,.35);color:#fecaca">🎯 Ціль: ${esc(targetPlace.name)}</div>` : "";
+
+  const etaHtml = (eta != null && eta > 0)
+    ? `<div class="popup-eta">⏱ ~${formatEta(eta)}</div>` : "";
+
+  const areaLine = isAreaOnly
+    ? `<div class="popup-area">≈ Вказано лише область / загальний НП</div>` : "";
+
+  const chHtml = channels && channels.size ? channelsListHtml(channels) : "";
+
+  /* v14.16.9: подтверждения с усилением */
+  let confirmLine = "";
+  if (confirmN && confirmN >= 2) {
+    let confirmText = `✓ Підтверджень: ${confirmN}`;
+    if (confirmN >= 5) confirmText = `★★★ Сильно підтверджено: ${confirmN} каналів`;
+    else if (confirmN >= 3) confirmText = `★★ Підтверджено: ${confirmN} каналів`;
+    else confirmText = `✓ Підтверджень: ${confirmN}`;
+    confirmLine = `<div class="popup-confirm">${confirmText}</div>`;
+  }
+
+  let extraLine = "";
+  if (isMig) extraLine = `<div class="popup-guess">✈ Аэродром взлёта МиГ-31К</div>`;
+  else if (isStrategic) extraLine = `<div class="popup-guess">⚠ Стратегічна авіація · без пуска</div>`;
+  else if (isLaunchEvent && launchOriginLabel) extraLine = `<div class="popup-guess">🚀 ПУСК з ${esc(launchOriginLabel)}</div>`;
+  else if (isGuess) extraLine = `<div class="popup-guess">⚠️ Позиція орієнтовна, з повідомлення.</div>`;
+
+  return `
+    <div class="popup-title type-${cls.type}">${esc(label)}</div>
+    <div>${esc((sampleText||"").slice(0,260))}</div>
+    ${etaHtml}${altHtml}${placeHtml}${targetHtml}${areaLine}${confirmLine}
+    ${timeHtml}
+    ${chHtml}
+    ${extraLine}
+  `;
+}
+
+function normalizeThreat(t) {
+  const out = { ...t };
+  const cls = CLASSIFIER([t.type, t.title, t.explanationShort].filter(Boolean).join(" "));
+  if (cls?.geran5) { out.type = "missile"; out._geran5 = true; out.title = out.title || "Герань-5"; }
+  else if (cls && !TYPE_META[t.type]) out.type = cls.type;
+  out._altitude = parseAltitude(t);
+  out._falling = isFallingMessage(t.explanationShort || t.title || "");
+  if (typeof t.count === "number" && t.count > 0) out._count = t.count;
+  if (typeof t.uncertaintyKm === "number") out.uncertaintyKm = t.uncertaintyKm;
+  if (t.advisory === true) out.advisory = true;
+  if (t.areaOnly === true) out.areaOnly = true;
+  return out;
+}
+function resolveHeading(t) {
+  if (t.heading != null) return t.heading;
+  if (t.velocity && t.velocity.bearingDeg != null) return t.velocity.bearingDeg;
+  return null;
+}
+function resolveBaseTime(t) {
+  const iso = t.confirmedAt || t.updatedAt;
+  if (iso) { const ms = Date.parse(iso); if (!isNaN(ms)) return ms; }
+  return Date.now();
+}
+
+const tracks = new Map();
+
+function upsertThreat(raw) {
+  try {
+    const t = normalizeThreat(raw);
+    if (t.lat == null || t.lon == null || t.areaOnly) return;
+    if (t.status === "resolved") { removeThreat(t.id); return; }
+    if (!inZone(t.lat, t.lon)) { removeThreat(t.id); return; }
+
+    const heading = resolveHeading(t);
+    const baseTime = resolveBaseTime(t);
+    const existing = tracks.get(t.id);
+    const uncertain = (t.uncertaintyKm != null && t.uncertaintyKm > CONFIG.UNCERTAIN_KM);
+    const advisory = !!t.advisory;
+    const areaOnly = !!t.areaOnly;
+
+    if (existing) {
+      existing.threat = t;
+      existing.baseLat = t.lat; existing.baseLon = t.lon;
+      existing.baseTime = baseTime;
+      existing.heading = heading;
+      existing.advisory = advisory;
+      existing.areaOnly = areaOnly;
+      existing.uncertain = uncertain;
+      const st = isStale(baseTime);
+      existing.stale = st;
+      existing.marker.setIcon(makeIcon(t, heading, false, 0, 0, existing.eta, st, advisory, areaOnly, uncertain));
+      existing.marker.setPopupContent(buildPopupHtml({
+        cls: { type: t.type, label: typeLabel(t) },
+        sampleText: t.explanationShort || t.title || "",
+        place: { name: t.locality || t.name || "—", lat: t.lat, lon: t.lon },
+        targetPlace: null, eta: existing.eta, altitude: t._altitude,
+        confirmN: 0, channels: null, firstSeen: null, lastSeen: baseTime,
+        isGuess: true, isAreaOnly: areaOnly
+      }));
+    } else {
+      let estHeading = heading;
+      if (estHeading == null) {
+        const launch = nearestLaunch(t.lat, t.lon);
+        estHeading = bearingBetween(launch.lat, launch.lon, t.lat, t.lon);
+      }
+      const st = isStale(baseTime);
+      const marker = L.marker([t.lat, t.lon], {
+        icon: makeIcon(t, estHeading, false, 0, 0, null, st, advisory, areaOnly, uncertain)
+      });
+      marker.bindPopup(buildPopupHtml({
+        cls: { type: t.type, label: typeLabel(t) },
+        sampleText: t.explanationShort || t.title || "",
+        place: { name: t.locality || t.name || "—", lat: t.lat, lon: t.lon },
+        targetPlace: null, eta: null, altitude: t._altitude,
+        confirmN: 0, channels: null, firstSeen: null, lastSeen: baseTime,
+        isGuess: true, isAreaOnly: areaOnly
+      }));
+      marker.addTo(threatLayer);
+      tracks.set(t.id, {
+        marker, threat: t,
+        baseLat: t.lat, baseLon: t.lon, baseTime,
+        heading: estHeading, eta: null, stale: st,
+        advisory, areaOnly, uncertain,
+        trail: null
+      });
+    }
+  } catch (e) {
+    console.warn("upsertThreat", e);
+    removeThreat(raw?.id);
+  }
+}
+function removeThreat(id) {
+  const tr = tracks.get(id);
+  if (!tr) return;
+  try { threatLayer.removeLayer(tr.marker); } catch {}
+  detachTrail(tr);
+  tracks.delete(id);
+}
+function syncThreats(list) {
+  const seen = new Set();
+  for (const t of list) { seen.add(t.id); upsertThreat(t); }
+  for (const id of [...tracks.keys()]) if (!seen.has(id)) removeThreat(id);
+}
+
+function attachTrail(o, heading) {
+  if (!o || !o.marker) return;
+  if (!o.cls || !needsTrail(o.cls.type)) {
+    if (o.trail) { trailLayer.removeLayer(o.trail); o.trail = null; }
+    return;
+  }
+  if (o.threat && o.threat.areaOnly) {
+    if (o.trail) { trailLayer.removeLayer(o.trail); o.trail = null; }
+    return;
+  }
+  const ll = o.marker.getLatLng();
+  let effHeading = heading;
+  if (effHeading == null) {
+    const { origin, dist } = nearestRussianOrigin(ll.lat, ll.lng);
+    if (origin && dist >= CONFIG.TRAIL_MIN_ORIGIN_DIST_KM) {
+      effHeading = bearingBetween(origin.lat, origin.lon, ll.lat, ll.lng);
+    }
+  }
+  const latlngs = computeTrailLatLngs(ll.lat, ll.lng, effHeading);
+  if (!latlngs) {
+    if (o.trail) { trailLayer.removeLayer(o.trail); o.trail = null; }
+    return;
+  }
+  if (!o.trail) {
+    o.trail = L.polyline(latlngs, {
+      color: CONFIG.TRAIL_COLOR, weight: CONFIG.TRAIL_WEIGHT,
+      opacity: CONFIG.TRAIL_OPACITY, interactive: false,
+      lineCap: "round", lineJoin: "round"
+    }).addTo(trailLayer);
+  } else {
+    o.trail.setLatLngs(latlngs);
+  }
+}
+function detachTrail(o) {
+  if (o && o.trail) { try { trailLayer.removeLayer(o.trail); } catch {} o.trail = null; }
+}
+
+let rafId = null;
+let animRunning = false;
+let lastEtaUpdate = 0;
+
+function isStale(baseTimeMs) {
+  return (Date.now() - baseTimeMs) > CONFIG.STALE_VISUAL_AFTER_HOURS * 3600000;
+}
+
+function animateMsgMarker(o, now) {
+  if (!o.marker || !o.moveBase || o.heading == null) return;
+  if (o.areaOnly || o.advisory) return;
+  if (o.threat && o.threat._falling) return;
+
+  if (o.moving) {
+    const elapsed = now - o.moving.startTime;
+    const progress = Math.min(1, elapsed / CONFIG.MOVE_ANIMATION_MS);
+    const eased = 1 - Math.pow(1 - progress, 2);
+    const lat = o.moving.fromLat + (o.moving.toLat - o.moving.fromLat) * eased;
+    const lon = o.moving.fromLon + (o.moving.toLon - o.moving.fromLon) * eased;
+    o.marker.setLatLng([lat, lon]);
+    if (progress >= 1) {
+      o.moving = null;
+      o.moveBase = { lat: o.marker.getLatLng().lat, lon: o.marker.getLatLng().lng, t: now };
+    }
+    return;
+  }
+
+  const elapsedH = (now - o.moveBase.t) / 3600000;
+  const capped = Math.min(Math.max(elapsedH, 0), CONFIG.EXTRAPOLATION_HOURS);
+  const speed = CONFIG.FALLBACK_SPEED[o.cls.type] || CONFIG.FALLBACK_SPEED.unknown;
+  const distKm = speed * capped;
+  const [lat, lon] = destPoint(o.moveBase.lat, o.moveBase.lon, o.heading, distKm);
+  o.marker.setLatLng([lat, lon]);
+}
+
+function animate() {
+  if (!animRunning) return;
+  const now = Date.now();
+  const updateEta = (now - lastEtaUpdate) > 1000;
+  if (updateEta) lastEtaUpdate = now;
+
+  for (const tr of tracks.values()) {
+    if (tr.heading == null) continue;
+    if (tr.threat._falling) continue;
+    if (tr.threat.areaOnly) continue;
+    if (tr.threat.advisory) continue;
+    const elapsedH = (now - tr.baseTime) / 3600000;
+    const capped = Math.min(Math.max(elapsedH, 0), CONFIG.EXTRAPOLATION_HOURS);
+    const speed = CONFIG.FALLBACK_SPEED[tr.threat.type] || CONFIG.FALLBACK_SPEED.unknown;
+    const distKm = speed * capped;
+    const [lat, lon] = destPoint(tr.baseLat, tr.baseLon, tr.heading, distKm);
+    tr.marker.setLatLng([lat, lon]);
+  }
+
+  for (const [key, o] of msgMarkers) {
+    animateMsgMarker(o, now);
+    attachTrail(o, o.heading);
+  }
+  rafId = requestAnimationFrame(animate);
+}
+function startAnim() { if (animRunning) return; animRunning = true; rafId = requestAnimationFrame(animate); }
+function stopAnim() { animRunning = false; if (rafId) { cancelAnimationFrame(rafId); rafId = null; } }
+
+const msgMarkers = new Map();
+const impactMarkers = new Map();
+const lastPlaceByChannel = {};
+
+function guessIcon(cls, hdg, alt, falling, stage, confirmN, totalWeight, eta, stale, advisory, areaOnly, uncertain) {
+  const meta = getMeta(cls.type);
+  const isUav = !!meta.isUav && !cls.isMissile && !cls.isBanderol && !cls.isJetDrone && !cls.isMig && !cls.isStrategic && !cls.isAwacs;
+  const svg = isUav ? uavSvg() : meta.icon(meta.color);
+  let rot = hdg != null ? hdg : 0;
+  if (meta.isKAB) rot = (hdg || 0) - 90;
+
+  const iconClasses = ["threat-icon"];
+  if (falling) iconClasses.push("falling");
+  if (meta.isStrategic) iconClasses.push("strat-pulse");
+  const isObservation = OBSERVATION_TYPES.has(cls.type);
+  if (isObservation) iconClasses.push("observation");
+  if (stale) iconClasses.push("stale");
+  if (advisory) iconClasses.push("advisory");
+  if (areaOnly) iconClasses.push("area-only");
+  if (uncertain) iconClasses.push("uncertain");
+
+  /* v14.16.9: усиление */
+  const boost = confirmBoostClass(confirmN, totalWeight);
+  if (boost) iconClasses.push(boost);
+
+  const arrow = (hdg != null && !falling && !cls.isMig && !cls.isStrategic && !areaOnly) ? `<div class="dir-arrow"></div>` : "";
+  const altClass = alt == null ? "" : (alt <= 300 ? " low" : (alt <= 1000 ? " med" : ""));
+  const altHtml = alt != null ? `<div class="alt-badge${altClass}">${formatAlt(alt)}</div>` : "";
+  const etaHtml = (eta != null && eta > 0 && eta < 600 && !isObservation && !areaOnly) ? `<div class="eta-badge">${formatEta(eta)}</div>` : "";
+  const fallingHtml = falling ? `<div class="falling-badge">↓ ПАДАЄ</div>` : "";
+  const staleHtml = stale ? `<div class="stale-badge">⌛ ДАНІ СТАРІ</div>` : "";
+  const advisoryHtml = advisory ? `<div class="advisory-badge">ℹ СПОСТЕРЕЖЕННЯ</div>` : "";
+  const areaHtml = areaOnly ? `<div class="area-badge">≈ ОБЛАСТЬ</div>` : "";
+  let confirmHtml = "";
+  if (confirmN >= CONFIG.MIN_CHANNELS_CONFIRM) {
+    confirmHtml = `<div class="confirm-badge ${confirmBadgeClass(confirmN, totalWeight||0)}">${confirmN}</div>`;
+  } else if (confirmN === 1 && stage === "threat") {
+    confirmHtml = `<div class="confirm-badge pending">⏱</div>`;
+  }
+
+  const badgeColor = cls.isStrategic ? "#9a3412" :
+                     cls.isMissile ? "#7f1d1d" :
+                     cls.isMig ? "#7c2d12" :
+                     cls.isAwacs ? "#0369a1" : "#1e293b";
+  const badgeBorder = cls.isStrategic ? "#ea580c" :
+                      cls.isMissile ? "#dc2626" :
+                      cls.isMig ? "#ea580c" :
+                      cls.isAwacs ? "#0ea5e9" : "#94a3b8";
+
+  const stageHtml = isObservation
+    ? `<div class="stage-badge observe" style="top:100%;bottom:auto;margin-top:16px">👁 СПОСТЕРЕЖЕННЯ</div>`
+    : (stage === "threat" ? `<div class="stage-badge warn" style="top:100%;bottom:auto;margin-top:16px">⚠ ЗАГРОЗА</div>` : "")
+    + (stage === "launch" ? `<div class="stage-badge" style="top:100%;bottom:auto;margin-top:16px">🚀 ПУСК</div>` : "")
+    + (stage === "takeoff" ? `<div class="stage-badge takeoff" style="top:100%;bottom:auto;margin-top:16px">✈ ВЗЛЁТ</div>` : "")
+    + (stage === "ready" ? `<div class="stage-badge ready" style="top:100%;bottom:auto;margin-top:16px">⚠ ГОТОВНІСТЬ</div>` : "");
+
+  return L.divIcon({
+    className:"",
+    html:`<div style="position:relative;width:${SIZE_BASE}px;height:${SIZE_BASE}px">
+      <div class="${iconClasses.join(" ")}" style="position:absolute;inset:0;transform:rotate(${rot}deg)">
+        ${arrow}${svg}
+      </div>
+      <div style="position:absolute;left:50%;top:100%;margin-top:2px;transform:translateX(-50%);
+        background:${badgeColor};color:#fff;font-size:8px;font-weight:800;
+        padding:1px 4px;border-radius:3px;border:1px solid ${badgeBorder};white-space:nowrap">${cls.label}</div>
+      ${confirmHtml}${altHtml}${etaHtml}${fallingHtml}${staleHtml}${advisoryHtml}${areaHtml}
+      ${stageHtml}
+    </div>`,
+    iconSize: [SIZE_BASE, SIZE_BASE],
+    iconAnchor: [SIZE_BASE/2, SIZE_BASE/2],
+    popupAnchor: [0, -SIZE_BASE/2]
+  });
+}
+
+function launcherIcon(stage, regionName, confirmN, totalWeight) {
+  const iconClasses = ["threat-icon"];
+  if (stage === "threat") iconClasses.push("threat-pulse");
+  /* v14.16.9: усиление */
+  const boost = confirmBoostClass(confirmN, totalWeight);
+  if (boost) iconClasses.push(boost);
+  let confirmHtml = "";
+  if (confirmN >= CONFIG.MIN_CHANNELS_CONFIRM) {
+    confirmHtml = `<div class="confirm-badge ${confirmBadgeClass(confirmN, totalWeight||0)}">${confirmN}</div>`;
+  } else if (confirmN === 1) {
+    confirmHtml = `<div class="confirm-badge pending">⏱</div>`;
+  }
+  return L.divIcon({
+    className:"",
+    html:`<div style="position:relative;width:${SIZE_BASE}px;height:${SIZE_BASE}px">
+      <div class="${iconClasses.join(" ")}" style="position:absolute;inset:0">${launcherSvg("#dc2626")}</div>
+      <div style="position:absolute;left:50%;top:100%;margin-top:2px;transform:translateX(-50%);
+        background:#7f1d1d;color:#fff;font-size:8px;font-weight:800;
+        padding:1px 5px;border-radius:3px;border:1px solid #dc2626;white-space:nowrap">${regionName}</div>
+      <div class="stage-badge warn" style="top:100%;bottom:auto;margin-top:16px">⚠ ЗАГРОЗА</div>
+      ${confirmHtml}
+    </div>`,
+    iconSize: [SIZE_BASE, SIZE_BASE],
+    iconAnchor: [SIZE_BASE/2, SIZE_BASE/2],
+    popupAnchor: [0, -SIZE_BASE/2]
+  });
+}
+function impactIcon(confirmN, eventAt, totalWeight) {
+  const confirmHtml = confirmN >= CONFIG.MIN_CHANNELS_CONFIRM
+    ? `<div class="confirm-badge ${confirmBadgeClass(confirmN, totalWeight||0)}">${confirmN}</div>` : "";
+  const ageHtml = eventAt ? `<div class="age-badge">${formatAgeShort(Date.now() - eventAt)}</div>` : "";
+  return L.divIcon({
+    className:"",
+    html:`<div style="position:relative;width:${SIZE_BASE}px;height:${SIZE_BASE}px">
+      <div class="impact-icon" style="position:absolute;inset:0">${impactSvg()}</div>
+      ${confirmHtml}${ageHtml}
+    </div>`,
+    iconSize: [SIZE_BASE, SIZE_BASE],
+    iconAnchor: [SIZE_BASE/2, SIZE_BASE/2],
+    popupAnchor: [0, -SIZE_BASE/2]
+  });
+}
+
+function totalWeightOf(channelsSet) {
+  let w = 0;
+  for (const ch of channelsSet) w += channelWeight(ch);
+  return w;
+}
+
+function extractLaunchStage(text) {
+  if (!text) return [];
+  if (NON_AIR_CONTEXT_RE.test(text)) return [];
+  const cls = CLASSIFIER(text);
+  if (!cls || !cls.hard) return [];
+
+  if (cls.isStrategic) {
+    const isReady = READY_RE.test(text);
+    const isLaunch = LAUNCH_RE.test(text) && !/без\s+пуск|поки\s+що\s+без/i.test(text);
+    if (!isReady && !isLaunch) return [];
+    const bases = findStrategicAirbases(text);
+    const count = parseAircraftCount(text);
+    const list = bases.length > 0 ? bases
+      : [{ key:"unknown", name:"аэродром не указан", lat:null, lon:null, region:"" }];
+    return list.map(b => ({
+      kind:"strategic", key:"strat_" + b.key, name:b.name, region:b.region,
+      lat:b.lat, lon:b.lon, cls, stage:"ready", target:null, count
+    }));
+  }
+  if (cls.isAwacs) {
+    return [{ kind:"awacs", key:"awacs", name:"А-50У", region:"", lat:null, lon:null, cls, stage:"takeoff", target:null, count:null }];
+  }
+  if (OBSERVATION_TYPES.has(cls.type)) {
+    if (NO_LAUNCH_RE.test(text)) return [];
+    const place = findPlaceInText(text);
+    if (!place) return [];
+    return [{
+      kind:"observation", key:"obs_" + place.key + "_" + cls.type,
+      name:place.name, region:"", lat:place.lat, lon:place.lon,
+      cls, stage:null, target:place, count:null
+    }];
+  }
+  if (NO_LAUNCH_RE.test(text) && !/пуск\s+вже|пуск\s+підтверджен|пуски\s+підтверджен|ракети\s+в\s+повітрі/i.test(text)) {
+    return [];
+  }
+  const hasLaunch = LAUNCH_RE.test(text);
+  const hasThreat = THREAT_RE.test(text);
+  let stage = null;
+  if (hasLaunch) stage = "launch";
+  else if (hasThreat) stage = "threat";
+  else {
+    if (cls.type === "uav" || cls.type === "jet_drone" || cls.type === "recon" || cls.type === "missile") stage = "threat";
+    else return [];
+  }
+  if (stage !== "launch" && (cls.isJetDrone || cls.type === "missile" || cls.type === "banderol")) {
+    if (!ACTION_RE.test(text)) return [];
+  }
+  if (cls.isMig) {
+    const base = findMigAirbase(text);
+    if (!base) return [{ kind:"mig", key:"mig_unknown", name:"аэродром не указан", region:"", lat:null, lon:null, cls, stage:"takeoff", target:null }];
+    return [{ kind:"mig", key:"mig_" + base.key, name:base.name, region:base.region, lat:base.lat, lon:base.lon, cls, stage:"takeoff", target:null }];
+  }
+  const directionTarget = findDirectionTarget(text);
+  const results = [];
+  const origins = findLaunchOriginsInText(text);
+  for (const o of origins) {
+    results.push({ kind:"origin", key:o.key, name:o.name, region:o.region, lat:o.lat, lon:o.lon, cls, stage, target:directionTarget });
+  }
+  const region = findRegionInText(text);
+  if (region && origins.length === 0) {
+    results.push({ kind:"region", key:region.key, name:region.name, region:region.name, lat:region.lat, lon:region.lon, cls, stage, target:directionTarget });
+  }
+  return results;
+}
+
+function extractPlaceAndType(text) {
+  if (!text) return null;
+  if (NON_AIR_CONTEXT_RE.test(text)) return null;
+  if (NO_LAUNCH_RE.test(text) && !/пуск\s+вже|пуск\s+підтверджен|пуски\s+підтверджен|ракети\s+в\s+повітрі/i.test(text)) return null;
+
+  const oblastCount = (text.match(/[А-ЯІЇЄҐ][а-яіїєґ]+щин[аиіу]:/gi) || []).length;
+  if (oblastCount >= 2) return null;
+
+  const cls = CLASSIFIER(text);
+  if (!cls) return null;
+  if (cls.isStrategic || cls.isMig || cls.isAwacs) return null;
+  if (OBSERVATION_TYPES.has(cls.type)) return null;
+
+  let observedPlace = null;
+  const obsMatch = OBSERVED_RE.exec(text);
+  if (obsMatch) {
+    const obsName = obsMatch[1].trim();
+    const p = findPlaceInText(obsName);
+    if (p) observedPlace = p;
+  }
+
+  const targetFirst = findDirectionTarget(text);
+
+  let place = null;
+  let isGenericOnly = false;
+
+  if (observedPlace) {
+    place = observedPlace;
+  } else if (targetFirst) {
+    place = {
+      key: targetFirst.key,
+      name: targetFirst.name,
+      lat: targetFirst.lat,
+      lon: targetFirst.lon,
+      index: 0, length: 0,
+      _isDirectionTarget: true
+    };
+  } else {
+    const sentences = text.split(/[.!?\n]+/);
+    let foundPlace = null;
+    for (let s = 0; s < sentences.length; s++) {
+      const sentence = sentences[s].trim();
+      if (!sentence) continue;
+      if (!cls.re.test(sentence)) continue;
+      const rawPlace = findPlaceInText(sentence);
+      if (rawPlace) {
+        if (TOO_GENERIC_PLACES.has(rawPlace.key)) {
+          const hasRefinement = /·|район|мікрорайон|масив|берег|жилмассив/i.test(sentence);
+          if (!hasRefinement) {
+            isGenericOnly = true;
+            const idx = text.indexOf(sentence);
+            foundPlace = {
+              key: rawPlace.key, name: rawPlace.name,
+              lat: rawPlace.lat, lon: rawPlace.lon,
+              index: idx + rawPlace.index, length: rawPlace.length
+            };
+            break;
+          }
+        }
+        const idx = text.indexOf(sentence);
+        foundPlace = {
+          key: rawPlace.key, name: rawPlace.name,
+          lat: rawPlace.lat, lon: rawPlace.lon,
+          index: idx + rawPlace.index, length: rawPlace.length
+        };
+        break;
+      }
+    }
+    if (foundPlace) place = foundPlace;
+  }
+
+  if (!place) return null;
+
+  const windowStart = Math.max(0, place.index - 200);
+  const windowEnd = Math.min(text.length, place.index + place.length + 200);
+  const sentence2 = text.slice(windowStart, windowEnd);
+  const localPlaceIndex = place.index - windowStart;
+  const localPlaceMatch = { index: localPlaceIndex, "0": text.substr(place.index, place.length), length: place.length };
+
+  const typeRegex = new RegExp(cls.re.source, cls.re.flags);
+  const typeMatch = typeRegex.exec(sentence2);
+  if (!typeMatch) return null;
+  if (!placeCloseEnough(sentence2, localPlaceMatch, typeMatch, 200)) return null;
+  if (!cls.hard) {
+    if (!ACTION_RE.test(sentence2)) return null;
+  }
+  return { place, cls, directionTarget: targetFirst, isGenericOnly };
+}
+
+function extractImpact(text) {
+  if (!text) return null;
+  if (NON_AIR_CONTEXT_RE.test(text)) return null;
+
+  const oblastCount = (text.match(/[А-ЯІЇЄҐ][а-яіїєґ]+щин[аиіу]:/gi) || []).length;
+  if (oblastCount >= 2) return null;
+
+  const impactMatch = IMPACT_RE.exec(text);
+  if (!impactMatch) return null;
+  const impactIdx = impactMatch.index;
+
+  const place = findPlaceInText(text);
+  if (place && Math.abs(place.index - impactIdx) <= 120) {
+    if (TOO_GENERIC_PLACES.has(place.key)) {
+      const rawLow = text.toLowerCase();
+      const idx = rawLow.indexOf(place.key);
+      const window = text.slice(Math.max(0, idx - 30), idx + place.key.length + 30);
+      const hasRefinement = /·|район|мікрорайон|масив|берег|жилмассив/i.test(window);
+      if (!hasRefinement) return null;
+    }
+    return { target: { key: place.key, name: place.name, lat: place.lat, lon: place.lon } };
+  }
+  const region = findRegionInText(text);
+  if (region) {
+    const rm = region.re.exec(text);
+    if (rm && Math.abs(rm.index - impactIdx) <= 120) {
+      return { target: { key: region.key, name: region.name, lat: region.lat, lon: region.lon } };
+    }
+  }
+  return null;
+}
+
+function applyCourseOffset(place, heading, offsetKm) {
+  if (!place || place.lat == null || place.lon == null) return place;
+  if (heading == null || offsetKm == null || offsetKm <= 0) return place;
+  const [lat, lon] = destPoint(place.lat, place.lon, heading, offsetKm);
+  return { ...place, lat, lon };
+}
+
+function syncMessageThreats(messages) {
+  const now = Date.now();
+  const candidates = new Map();
+  const impacts = new Map();
+
+  for (let i = 0; i < (messages||[]).length; i++) {
+    const m = messages[i];
+    const text = m.text || "";
+    const ch = (m.channel || "unknown").replace(/^@/, "").toLowerCase();
+    const msgMs = m.date ? Date.parse(m.date) : now;
+
+    const isAltCh = isAltitudeChannel(ch);
+
+    if (isAltCh) {
+      const pa = parsePlaceAndAltitude(text);
+      if (pa) {
+        const key = "pa|" + pa.place.key;
+        if (!candidates.has(key)) {
+          candidates.set(key, {
+            kind:"place", place: pa.place,
+            cls: { type:"uav", label:"БПЛА", hard:false },
+            target: null,
+            altitudeOverride: pa.altitude,
+            channels: new Set(),
+            firstSeen: msgMs, lastSeen: msgMs, sampleText: text
+          });
+        }
+        const c = candidates.get(key);
+        c.channels.add(ch);
+        if (msgMs < c.firstSeen) c.firstSeen = msgMs;
+        if (msgMs > c.lastSeen) c.lastSeen = msgMs;
+        c.altitudeOverride = pa.altitude;
+        c.sampleText = text;
+        lastPlaceByChannel[ch] = key;
+        continue;
+      }
+      const justAlt = isJustAltitude(text);
+      if (justAlt != null) {
+        const lastKey = lastPlaceByChannel[ch];
+        if (lastKey && candidates.has(lastKey)) {
+          const c2 = candidates.get(lastKey);
+          c2.altitudeOverride = justAlt;
+          c2.lastSeen = msgMs;
+          c2.channels.add(ch);
+        }
+        continue;
+      }
+    }
+
+    const launches = extractLaunchStage(text);
+    if (launches.length > 0) {
+      for (const L of launches) {
+        const key = `reg|${L.key}|${L.cls.type}|${L.stage || "obs"}`;
+        if (!candidates.has(key)) {
+          candidates.set(key, {
+            kind: L.kind, origin: L, cls: L.cls, stage: L.stage,
+            region: { key: L.key, name: L.name, lat: L.lat, lon: L.lon },
+            target: L.target, count: L.count || null,
+            channels: new Set(),
+            firstSeen: msgMs, lastSeen: msgMs, sampleText: text
+          });
+        }
+        const c = candidates.get(key);
+        c.channels.add(ch);
+        if (msgMs < c.firstSeen) c.firstSeen = msgMs;
+        if (msgMs > c.lastSeen) c.lastSeen = msgMs;
+        if (text.length < c.sampleText.length) c.sampleText = text;
+        if (L.count && (!c.count || L.count > c.count)) c.count = L.count;
+      }
+      continue;
+    }
+
+    const extracted = extractPlaceAndType(text);
+    if (extracted) {
+      const { place, cls, directionTarget, isGenericOnly } = extracted;
+      const key = `msg|${place.key}|${cls.type}`;
+      if (!candidates.has(key)) {
+        candidates.set(key, {
+          kind:"place", place, cls, target: directionTarget,
+          isAreaOnly: !!isGenericOnly,
+          channels: new Set(),
+          firstSeen: msgMs, lastSeen: msgMs, sampleText: text
+        });
+      }
+      const c = candidates.get(key);
+      c.channels.add(ch);
+      if (msgMs < c.firstSeen) c.firstSeen = msgMs;
+      if (msgMs > c.lastSeen) c.lastSeen = msgMs;
+      if (text.length < c.sampleText.length) c.sampleText = text;
+      continue;
+    }
+
+    const impact = extractImpact(text);
+    if (impact) {
+      const key = `imp|${impact.target.key}`;
+      if (!impacts.has(key)) {
+        impacts.set(key, {
+          target: impact.target,
+          channels: new Set(),
+          eventAt: null, lastSeen: msgMs, sampleText: text
+        });
+      }
+      const c = impacts.get(key);
+      c.channels.add(ch);
+      const evt = parseEventTime(text, m.date);
+      if (evt && (!c.eventAt || evt > c.eventAt)) c.eventAt = evt;
+      if (msgMs < c.lastSeen) c.lastSeen = msgMs;
+      if (text.length < c.sampleText.length) c.sampleText = text;
+    }
+  }
+
+  for (const [key, c] of candidates) {
+    const confirmN = c.channels.size;
+    const totalW = totalWeightOf(c.channels);
+    const isThreatSolo = c.stage === "threat" && confirmN < CONFIG.MIN_CHANNELS_CONFIRM;
+    const isMig = c.cls && c.cls.isMig;
+    const isStrategic = c.cls && c.cls.isStrategic;
+    const isAwacs = c.cls && c.cls.isAwacs;
+    const isObservation = c.cls && OBSERVATION_TYPES.has(c.cls.type);
+    const age = now - c.firstSeen;
+    const isAltitudeMsg = c.altitudeOverride != null;
+    const isAreaOnlyMsg = !!c.isAreaOnly;
+
+    if (isStrategic) { if (confirmN < 1) continue; }
+    else if (isMig) { if (confirmN < 1) continue; if (age > CONFIG.STALE_MSG_MS) continue; }
+    else if (isAwacs) continue;
+    else if (isAltitudeMsg) { if (age > CONFIG.STALE_MSG_MS) continue; }
+    else if (isAreaOnlyMsg) { if (age > CONFIG.STALE_MSG_MS) continue; }
+    else if (isObservation) { if (confirmN < CONFIG.MIN_CHANNELS_CONFIRM) continue; if (age > CONFIG.STALE_MSG_MS) continue; }
+    else if (isThreatSolo) { if (age > CONFIG.LAUNCHER_SOLO_TTL_MS) continue; }
+    else if (confirmN < CONFIG.MIN_CHANNELS_CONFIRM) continue;
+    else if (totalW < 2.0) continue;
+
+    if (c.kind === "strategic") {
+      const { region, cls, origin, count } = c;
+      if (region.lat != null && region.lon != null) {
+        const zoneOk = inZone(region.lat, region.lon) || CONFIG.STRAT_SHOW_OUTSIDE_ZONE;
+        if (!zoneOk) continue;
+        const fakeThreat = { type:cls.type, _altitude:null, _falling:false, _stage:"ready", _count:count || null, heading:null };
+        const marker = L.marker([region.lat, region.lon], {
+          icon: makeIcon(fakeThreat, null, false, confirmN, totalW, null, false, false, false, false),
+          zIndexOffset: 930
+        });
+        marker.bindPopup(buildPopupHtml({
+          cls: { type:cls.type, label:"Стратег. авиация" },
+          sampleText: c.sampleText, place: { name:origin.name, lat: region.lat, lon: region.lon },
+          targetPlace: null, eta: null, altitude: null,
+          confirmN, totalWeight: totalW, channels: c.channels, firstSeen: c.firstSeen, lastSeen: c.lastSeen,
+          isGuess: true, isStrategic: true
+        }));
+        marker.addTo(msgThreatLayer);
+        if (msgMarkers.has(key)) {
+          const _old = msgMarkers.get(key);
+          if (_old.marker) msgThreatLayer.removeLayer(_old.marker);
+          detachTrail(_old);
+        }
+        msgMarkers.set(key, {
+          marker, lastSeen: c.lastSeen, firstSeen: c.firstSeen,
+          alt:null, falling:false, hdg:null,
+          cls, place:{ name:origin.name, lat:region.lat, lon:region.lon },
+          targetPlace:null,
+          threat:{ type:cls.type, status:"active" },
+          isRegion:true, stage:"ready", confirmN, totalWeight:totalW, channels:c.channels,
+          stale:false, trail:null, advisory:false, areaOnly:false, uncertain:false
+        });
+      }
+      continue;
+    }
+
+    if (c.kind === "mig") {
+      const { region, cls, origin } = c;
+      if (region.lat == null || region.lon == null) continue;
+      const zoneOk = inZone(region.lat, region.lon) || CONFIG.MIG_SHOW_OUTSIDE_ZONE;
+      if (!zoneOk) continue;
+      const marker = L.marker([region.lat, region.lon], {
+        icon: guessIcon(cls, null, null, false, "takeoff", confirmN, totalW, null, false, false, false, false),
+        zIndexOffset: 935
+      });
+      marker.bindPopup(buildPopupHtml({
+        cls: { type:cls.type, label:"МиГ-31К" },
+        sampleText: c.sampleText, place: { name:origin.name, lat: region.lat, lon: region.lon },
+        targetPlace: null, eta: null, altitude: null,
+        confirmN, totalWeight: totalW, channels: c.channels, firstSeen: c.firstSeen, lastSeen: c.lastSeen,
+        isGuess: true, isMig: true
+      }));
+      marker.addTo(msgThreatLayer);
+      if (msgMarkers.has(key)) {
+        const _old = msgMarkers.get(key);
+        if (_old.marker) msgThreatLayer.removeLayer(_old.marker);
+        detachTrail(_old);
+      }
+      msgMarkers.set(key, {
+        marker, lastSeen: c.lastSeen, firstSeen: c.firstSeen,
+        alt:null, falling:false, hdg:null,
+        cls, place:{ name:origin.name, lat:region.lat, lon:region.lon },
+        targetPlace:null,
+        threat:{ type:cls.type, status:"active" },
+        isRegion:true, stage:"takeoff", confirmN, totalWeight:totalW, channels:c.channels,
+        stale:false, trail:null, advisory:false, areaOnly:false, uncertain:false
+      });
+      continue;
+    }
+
+    if (c.kind === "observation") {
+      const { cls, target } = c;
+      const place = target;
+      const src = DEFAULT_SOURCES[cls.type];
+      let arrowBearing = 0;
+      if (needsTrail(cls.type)) {
+        const { origin, dist } = nearestRussianOrigin(place.lat, place.lon);
+        if (origin && dist >= CONFIG.TRAIL_MIN_ORIGIN_DIST_KM) {
+          arrowBearing = bearingBetween(origin.lat, origin.lon, place.lat, place.lon);
+        }
+      } else if (src) {
+        arrowBearing = (bearingBetween(place.lat, place.lon, src.lat, src.lon) + 180) % 360;
+      }
+      const displayPos = [place.lat, place.lon];
+      const marker = L.marker(displayPos, {
+        icon: guessIcon(cls, arrowBearing, null, false, null, confirmN, totalW, null, false, false, false, false),
+        zIndexOffset: 900
+      });
+      marker.bindPopup(buildPopupHtml({
+        cls: { type:cls.type, label:cls.label },
+        sampleText: c.sampleText, place: { name:place.name, lat: place.lat, lon: place.lon },
+        targetPlace: null, eta: null, altitude: null,
+        confirmN, totalWeight: totalW, channels: c.channels, firstSeen: c.firstSeen, lastSeen: c.lastSeen,
+        isGuess: true
+      }));
+      marker.addTo(msgThreatLayer);
+      if (msgMarkers.has(key)) {
+        const _old = msgMarkers.get(key);
+        if (_old.marker) msgThreatLayer.removeLayer(_old.marker);
+        detachTrail(_old);
+      }
+      const obsObj = {
+        marker, lastSeen: c.lastSeen, firstSeen: c.firstSeen,
+        alt:null, falling:false, hdg:arrowBearing,
+        cls, place:{ name:place.name, lat:place.lat, lon:place.lon },
+        targetPlace:place,
+        threat:{ type:cls.type, status:"active", _speed:0 },
+        confirmN, totalWeight: totalW, channels: c.channels,
+        heading: arrowBearing,
+        stage:null, stale:false, trail:null,
+        advisory:false, areaOnly:false, uncertain:false
+      };
+      msgMarkers.set(key, obsObj);
+      attachTrail(obsObj, arrowBearing);
+      continue;
+    }
+
+    if (c.kind === "region" || c.kind === "origin" || c.kind === "default" || c.kind === "guess") {
+      const { region, cls, stage, origin, target } = c;
+      const originLabel = origin.kind === "origin" ? `${origin.name}` : origin.name;
+      if (!inZone(region.lat, region.lon)) continue;
+      let marker;
+
+      if (stage === "launch") {
+        const targetBearing = target ? bearingBetween(region.lat, region.lon, target.lat, target.lon)
+                                     : bearingBetween(region.lat, region.lon, 50.45, 30.52);
+        const fakeThreat = { type:cls.type, _altitude:parseAltitude({ explanationShort:c.sampleText }), _falling:false, _stage:"launch", heading:targetBearing };
+        marker = L.marker([region.lat, region.lon], {
+          icon: makeIcon(fakeThreat, targetBearing, true, confirmN, totalW, null, false, false, false, false),
+          zIndexOffset: 950
+        });
+        marker.bindPopup(buildPopupHtml({
+          cls: { type:cls.type, label:cls.label },
+          sampleText: c.sampleText, place: { name:originLabel, lat: region.lat, lon: region.lon },
+          targetPlace: target, eta: null, altitude: null,
+          confirmN, totalWeight: totalW, channels: c.channels, firstSeen: c.firstSeen, lastSeen: c.lastSeen,
+          isGuess: true, isLaunchEvent: true, launchOriginLabel: originLabel, launchBearing: targetBearing
+        }));
+        marker.addTo(msgThreatLayer);
+        if (msgMarkers.has(key)) {
+          const _old = msgMarkers.get(key);
+          if (_old.marker) msgThreatLayer.removeLayer(_old.marker);
+          detachTrail(_old);
+        }
+        const launchObj = {
+          marker, lastSeen: c.lastSeen, firstSeen: c.firstSeen,
+          alt:null, falling:false, hdg:targetBearing,
+          cls, place:{ name:originLabel, lat:region.lat, lon:region.lon },
+          targetPlace: target, eta:null,
+          threat:{ type:cls.type, status:"active" },
+          confirmN, totalWeight:totalW, channels:c.channels,
+          moveBase:{ lat:region.lat, lon:region.lon, t:c.firstSeen },
+          heading: targetBearing, stage:"launch",
+          stale:false, trail:null,
+          advisory:false, areaOnly:false, uncertain:false
+        };
+        msgMarkers.set(key, launchObj);
+        attachTrail(launchObj, targetBearing);
+      } else {
+        marker = L.marker([region.lat, region.lon], {
+          icon: launcherIcon(stage, originLabel, confirmN, totalW),
+          zIndexOffset: 940
+        });
+        marker.bindPopup(buildPopupHtml({
+          cls: { type:cls.type, label:cls.label },
+          sampleText: c.sampleText, place: { name:originLabel, lat: region.lat, lon: region.lon },
+          targetPlace: target, eta: null, altitude: null,
+          confirmN, totalWeight: totalW, channels: c.channels, firstSeen: c.firstSeen, lastSeen: c.lastSeen,
+          isGuess: true
+        }));
+        marker.addTo(msgThreatLayer);
+        if (msgMarkers.has(key)) {
+          const _old = msgMarkers.get(key);
+          if (_old.marker) msgThreatLayer.removeLayer(_old.marker);
+          detachTrail(_old);
+        }
+        msgMarkers.set(key, {
+          marker, lastSeen: c.lastSeen, firstSeen: c.firstSeen,
+          alt:null, falling:false, hdg:null,
+          cls, place:{ name:originLabel, lat:region.lat, lon:region.lon },
+          targetPlace: target,
+          threat:{ type:cls.type, status:"active" },
+          isRegion:true, stage, confirmN, totalWeight:totalW, channels:c.channels,
+          stale:false, trail:null,
+          advisory:false, areaOnly:false, uncertain:false
+        });
+      }
+      continue;
+    }
+
+    if (c.kind === "place") {
+      const { place, cls, target } = c;
+
+      let isAreaOnly = !!c.isAreaOnly;
+      if (place && TOO_GENERIC_PLACES.has(place.key)) isAreaOnly = true;
+
+      if (!inZone(place.lat, place.lon) && !(target && inZone(target.lat, target.lon))) continue;
+
+      const alt = c.altitudeOverride != null ? c.altitudeOverride
+                : parseAltitude({ explanationShort: c.sampleText });
+      const falling = isFallingMessage(c.sampleText);
+
+      const { origin, dist } = nearestRussianOrigin(place.lat, place.lon);
+      const hasOrigin = origin && dist >= CONFIG.TRAIL_MIN_ORIGIN_DIST_KM;
+
+      let hdg = null;
+      let targetPlace = target || place;
+
+      if (isAreaOnly) {
+        hdg = null;
+        targetPlace = null;
+      } else if (target) {
+        hdg = bearingBetween(place.lat, place.lon, target.lat, target.lon);
+      } else if (hasOrigin) {
+        hdg = bearingBetween(origin.lat, origin.lon, place.lat, place.lon);
+      }
+
+      let displayPlace = place;
+      if (!isAreaOnly && hdg != null && c.origin != null) {
+        displayPlace = applyCourseOffset(place, hdg, CONFIG.POSITION_OFFSET_KM);
+      }
+      const displayPos = [displayPlace.lat, displayPlace.lon];
+
+      const speed = CONFIG.FALLBACK_SPEED[cls.type] || CONFIG.FALLBACK_SPEED.unknown;
+      let eta = null;
+      if (targetPlace && !isAreaOnly) {
+        const distKm = haversineKm(displayPos[0], displayPos[1], targetPlace.lat, targetPlace.lon);
+        eta = distKm / speed * 60;
+      }
+
+      const marker = L.marker(displayPos, {
+        icon: guessIcon(cls, hdg, alt, falling, null, confirmN, totalW, eta, false, false, isAreaOnly, false),
+        zIndexOffset: 900
+      });
+      marker.bindPopup(buildPopupHtml({
+        cls: { type:cls.type, label:cls.label },
+        sampleText: c.sampleText, place: { name:place.name, lat: displayPos[0], lon: displayPos[1] },
+        targetPlace: isAreaOnly ? null : targetPlace,
+        eta: isAreaOnly ? null : eta, altitude: alt,
+        confirmN, totalWeight: totalW, channels: c.channels, firstSeen: c.firstSeen, lastSeen: c.lastSeen,
+        isGuess: true, isAreaOnly: isAreaOnly, launchBearing: hdg
+      }));
+      marker.addTo(msgThreatLayer);
+
+      const oldRec = msgMarkers.get(key);
+      if (oldRec && oldRec.marker) {
+        const oldPos = oldRec.marker.getLatLng();
+        const distMoved = haversineKm(oldPos.lat, oldPos.lng, displayPos[0], displayPos[1]);
+        if (distMoved > 0.1) {
+          try { msgThreatLayer.removeLayer(oldRec.marker); } catch {}
+          detachTrail(oldRec);
+        }
+      }
+
+      const placeObj = {
+        marker, lastSeen: c.lastSeen, firstSeen: c.firstSeen,
+        alt, falling, hdg, cls,
+        place: displayPlace,
+        targetPlace: isAreaOnly ? null : targetPlace,
+        eta: isAreaOnly ? null : eta,
+        threat:{ type:cls.type, status:"active", _falling:falling },
+        confirmN, totalWeight:totalW, channels:c.channels,
+        moveBase:{ lat:displayPos[0], lon:displayPos[1], t:c.firstSeen },
+        heading: hdg,
+        stage:null, stale:false, trail:null,
+        advisory:false, areaOnly:isAreaOnly, uncertain:false,
+        moving: oldRec && oldRec.marker ? {
+          fromLat: oldRec.marker.getLatLng().lat,
+          fromLon: oldRec.marker.getLatLng().lng,
+          toLat: displayPos[0],
+          toLon: displayPos[1],
+          startTime: now
+        } : null
+      };
+
+      if (placeObj.moving) {
+        marker.setLatLng([placeObj.moving.fromLat, placeObj.moving.fromLon]);
+      }
+
+      msgMarkers.set(key, placeObj);
+      attachTrail(placeObj, hdg);
+    }
+  }
+
+  for (const [key, c] of impacts) {
+    const confirmN = c.channels.size;
+    const totalW = totalWeightOf(c.channels);
+    if (confirmN < CONFIG.MIN_CHANNELS_CONFIRM) continue;
+    if (totalW < 2.0) continue;
+    const eventAt = c.eventAt || c.lastSeen;
+    const age = now - eventAt;
+    if (age > CONFIG.IMPACT_TTL_MS) {
+      if (impactMarkers.has(key)) {
+        impactLayer.removeLayer(impactMarkers.get(key).marker);
+        impactMarkers.delete(key);
+      }
+      continue;
+    }
+    if (!inZone(c.target.lat, c.target.lon)) continue;
+    const t = c.target;
+    const marker = L.marker([t.lat, t.lon], {
+      icon: impactIcon(confirmN, eventAt, totalW),
+      zIndexOffset: 880
+    });
+    marker.bindPopup(buildPopupHtml({
+      cls: { type:"impact", label:"Взрыв / прилёт" },
+      sampleText: c.sampleText, place: { name:t.name, lat: t.lat, lon: t.lon },
+      targetPlace: null, eta: null, altitude: null,
+      confirmN, totalWeight: totalW, channels: c.channels, firstSeen: eventAt, lastSeen: eventAt,
+      isGuess: true
+    }));
+    marker.addTo(impactLayer);
+    if (impactMarkers.has(key)) impactLayer.removeLayer(impactMarkers.get(key).marker);
+    impactMarkers.set(key, { marker, lastSeen: eventAt, eventAt, confirmN, channels: c.channels });
+  }
+
+  for (const [key, o] of [...msgMarkers]) {
+    if (now - o.lastSeen > CONFIG.STALE_MSG_MS) {
+      if (o.marker) msgThreatLayer.removeLayer(o.marker);
+      detachTrail(o);
+      msgMarkers.delete(key);
+    }
+  }
+  for (const [key, o] of [...impactMarkers]) {
+    if (now - (o.eventAt || o.lastSeen) > CONFIG.IMPACT_TTL_MS) {
+      impactLayer.removeLayer(o.marker);
+      impactMarkers.delete(key);
+    }
+  }
+}
+
+let ws = null;
+let wsConnected = false;
+let wsReconnectMs = CONFIG.WS_RECONNECT_MS;
+let wsReconnectTimer = null;
+let restFallbackActive = false;
+let pollTimer = null;
+let abortCtrl = null;
+
+const wsState = { threats: new Map(), alerts: null };
+
+function wsScheduleReconnect() {
+  if (wsReconnectTimer) return;
+  wsReconnectTimer = setTimeout(() => { wsReconnectTimer = null; wsConnect(); }, wsReconnectMs);
+  wsReconnectMs = Math.min(wsReconnectMs * 2, CONFIG.WS_RECONNECT_MAX_MS);
+}
+function wsConnect() {
+  try {
+    if (ws) { try { ws.close(); } catch {} ws = null; }
+    ws = new WebSocket(CONFIG.WS_URL);
+    ws.onopen = () => {
+      wsConnected = true;
+      wsReconnectMs = CONFIG.WS_RECONNECT_MS;
+      restFallbackActive = false;
+      stopRestPolling();
+    };
+    ws.onmessage = (e) => {
+      try {
+        const env = JSON.parse(e.data);
+        wsHandleFrame(env);
+      } catch (err) {}
+    };
+    ws.onerror = () => {};
+    ws.onclose = () => {
+      wsConnected = false;
+      ws = null;
+      if (!restFallbackActive) { restFallbackActive = true; startRestPolling(); }
+      wsScheduleReconnect();
+    };
+  } catch (e) {
+    if (!restFallbackActive) { restFallbackActive = true; startRestPolling(); }
+    wsScheduleReconnect();
+  }
+}
+function wsHandleFrame(env) {
+  if (!env || !env.type) return;
+  switch (env.type) {
+    case "snapshot": {
+      const data = env.data || {};
+      const list = data.threats || [];
+      wsState.threats.clear();
+      for (const t of list) if (t.id) wsState.threats.set(t.id, t);
+      if (data.alerts) {
+        wsState.alerts = data.alerts;
+        try { syncAlertPolygons(data.alerts); } catch (e) {}
+      }
+      applyThreatsFromWs();
+      break;
+    }
+    case "upsert": {
+      const t = env.data;
+      if (!t || !t.id) return;
+      wsState.threats.set(t.id, t);
+      applyThreatsFromWs();
+      break;
+    }
+    case "remove": {
+      const data = env.data || {};
+      if (data.id) wsState.threats.delete(data.id);
+      applyThreatsFromWs();
+      break;
+    }
+    case "alerts": {
+      const data = env.data || {};
+      wsState.alerts = data;
+      try { syncAlertPolygons(data); } catch (e) {}
+      break;
+    }
+  }
+}
+function applyThreatsFromWs() {
+  const list = [...wsState.threats.values()];
+  try { syncThreats(list); } catch (e) {}
+}
+
+async function fetchMessages() {
+  try {
+    if (abortCtrl) abortCtrl.abort();
+    abortCtrl = new AbortController();
+    const signal = abortCtrl.signal;
+    const r = await fetch(CONFIG.API_MESSAGES, { signal });
+    if (!r.ok) throw new Error("messages "+r.status);
+    const data = await r.json();
+    const msgs = data.messages || [];
+    try { syncMessageThreats(msgs); } catch (e) {}
+  } catch (e) { if (e.name !== "AbortError") {} }
+}
+async function fetchThreatsAndAlerts() {
+  try {
+    if (abortCtrl) abortCtrl.abort();
+    abortCtrl = new AbortController();
+    const signal = abortCtrl.signal;
+    const [tr, al] = await Promise.all([
+      fetch(CONFIG.API_THREATS, { signal }).then(r => { if (!r.ok) throw new Error("threats "+r.status); return r.json(); }),
+      fetch(CONFIG.API_ALERTS, { signal }).then(r => { if (!r.ok) throw new Error("alerts "+r.status); return r.json(); })
+    ]);
+    const threats = tr.threats || [];
+    try { syncThreats(threats); } catch (e) {}
+    try { syncAlertPolygons(al); } catch (e) {}
+  } catch (e) {
+    if (e.name === "AbortError") return;
+  }
+}
+async function restPollLoop() {
+  await fetchThreatsAndAlerts();
+  await fetchMessages();
+  pollTimer = setTimeout(restPollLoop, CONFIG.POLL_MS);
+}
+function startRestPolling() {
+  if (pollTimer) clearTimeout(pollTimer);
+  restPollLoop();
+}
+function stopRestPolling() {
+  if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+  if (abortCtrl) { abortCtrl.abort(); abortCtrl = null; }
+}
+
+function clearAll() {
+  msgMarkers.forEach(o => {
+    if (o.marker) try { msgThreatLayer.removeLayer(o.marker); } catch {}
+    detachTrail(o);
+  });
+  msgMarkers.clear();
+  impactMarkers.forEach(o => {
+    if (o.marker) try { impactLayer.removeLayer(o.marker); } catch {}
+  });
+  impactMarkers.clear();
+  tracks.forEach(tr => {
+    if (tr.marker) try { threatLayer.removeLayer(tr.marker); } catch {}
+    detachTrail(tr);
+  });
+  tracks.clear();
+}
+
+$("btnRefresh").addEventListener("click", () => {
+  if (wsConnected && ws) { try { ws.close(); } catch {} wsConnect(); }
+  else startRestPolling();
+  showToast("Обновление…");
+});
+$("btnClear").addEventListener("click", () => {
+  clearAll();
+  showToast("Очищено");
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { stopRestPolling(); stopAnim(); }
+  else { if (!wsConnected) startRestPolling(); startAnim(); }
+});
+
+(async function init() {
+  const ctrl = new AbortController();
+  loadAlertGeo(ctrl.signal);
+  wsConnect();
+  fetchMessages();
+  setInterval(fetchMessages, 5000);
+  startAnim();
+})();
+</script>
+</body>
+</html>
